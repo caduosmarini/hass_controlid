@@ -24,7 +24,12 @@ class ControlIDAuthError(ControlIDApiError):
 
 @dataclass
 class ControlIDApiClient:
-    """Client for the Control iD Access API (.fcgi endpoints)."""
+    """Client for the Control iD Access API (.fcgi endpoints).
+
+    Automatically detects whether the device uses direct relays (``doors``)
+    or the external SecBox module (``sec_boxes``) on the first call to
+    ``async_detect_device``.
+    """
 
     session: ClientSession
     host: str
@@ -34,6 +39,8 @@ class ControlIDApiClient:
     door_id: int
 
     _session_id: str | None = field(default=None, repr=False)
+    _device_type: str | None = field(default=None, repr=False)
+    _actual_id: int | None = field(default=None, repr=False)
 
     @property
     def _base_url(self) -> str:
@@ -117,24 +124,87 @@ class ControlIDApiClient:
         self._session_id = session_id
         _LOGGER.debug("Authenticated with Control iD device at %s", self.host)
 
+    async def async_detect_device(self) -> None:
+        """Auto-detect whether the device uses direct relays or SecBox.
+
+        Must be called once after authentication.  Sets ``_device_type``
+        ("door" or "sec_box") and ``_actual_id`` used by all other methods.
+        """
+        data = await self._post("doors_state.fcgi")
+        _LOGGER.debug("doors_state (detect): %s", data)
+
+        doors = data.get("doors", [])
+        if doors:
+            for d in doors:
+                if d.get("id") == self.door_id:
+                    self._device_type = "door"
+                    self._actual_id = self.door_id
+                    _LOGGER.info(
+                        "Detected direct relay, door id=%s", self._actual_id
+                    )
+                    return
+            self._device_type = "door"
+            self._actual_id = doors[0]["id"]
+            _LOGGER.info(
+                "door_id=%s not found, using first door id=%s",
+                self.door_id, self._actual_id,
+            )
+            return
+
+        sec_boxes = data.get("sec_boxes", [])
+        if sec_boxes:
+            self._device_type = "sec_box"
+            self._actual_id = sec_boxes[0]["id"]
+            _LOGGER.info(
+                "Detected SecBox device, using sec_box id=%s", self._actual_id
+            )
+            return
+
+        self._device_type = "door"
+        self._actual_id = self.door_id
+        _LOGGER.warning(
+            "No doors or sec_boxes in response, defaulting to door id=%s",
+            self.door_id,
+        )
+
     async def async_get_door_state(self) -> bool:
         """Return True if the door is currently open."""
+        if self._device_type is None:
+            await self.async_detect_device()
+
         data = await self._post("doors_state.fcgi")
-        _LOGGER.debug("doors_state response: %s", data)
-        for door in data.get("doors", []):
-            if door.get("id") == self.door_id:
-                return bool(door.get("open", False))
-        for sbox in data.get("sec_boxes", []):
-            if sbox.get("id") == self.door_id:
-                return bool(sbox.get("open", False))
-        _LOGGER.warning(
-            "Door id=%s not found in doors_state response: %s", self.door_id, data
-        )
+
+        if self._device_type == "sec_box":
+            for sbox in data.get("sec_boxes", []):
+                if sbox.get("id") == self._actual_id:
+                    return bool(sbox.get("open", False))
+        else:
+            for door in data.get("doors", []):
+                if door.get("id") == self._actual_id:
+                    return bool(door.get("open", False))
+
         return False
 
     async def async_open_door(self) -> None:
-        """Trigger the relay to open the door."""
-        payload = {"actions": [{"action": "door", "parameters": f"door={self.door_id}"}]}
+        """Trigger the relay / SecBox to open the door."""
+        if self._device_type is None:
+            await self.async_detect_device()
+
+        if self._device_type == "sec_box":
+            payload = {
+                "actions": [{
+                    "action": "sec_box",
+                    "parameters": f"id={self._actual_id}, reason=3",
+                }]
+            }
+        else:
+            payload = {
+                "actions": [{
+                    "action": "door",
+                    "parameters": f"door={self._actual_id}",
+                }]
+            }
+
         _LOGGER.debug("execute_actions request: %s", payload)
         result = await self._post("execute_actions.fcgi", payload)
         _LOGGER.debug("execute_actions response: %s", result)

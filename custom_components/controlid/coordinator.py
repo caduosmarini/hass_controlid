@@ -78,7 +78,8 @@ class ControlIDDataUpdateCoordinator(DataUpdateCoordinator[ControlIDData]):
 
     def handle_door_event(self, door_id: int, is_open: bool) -> None:
         """Process a real-time door notification from the monitor webhook."""
-        if door_id != self.api.door_id:
+        actual = self.api._actual_id or self.api.door_id
+        if door_id != actual:
             return
         if self.data is None:
             return
