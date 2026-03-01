@@ -19,9 +19,11 @@ from .const import (
     CONF_HOST,
     CONF_NAME,
     CONF_PORT,
+    CONF_SCAN_INTERVAL,
     DEFAULT_DOOR_ID,
     DEFAULT_NAME,
     DEFAULT_PORT,
+    DEFAULT_SCAN_INTERVAL,
     DOMAIN,
 )
 
@@ -39,6 +41,10 @@ def _build_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             vol.Required(CONF_USERNAME, default=d.get(CONF_USERNAME, vol.UNDEFINED)): str,
             vol.Required(CONF_PASSWORD, default=d.get(CONF_PASSWORD, vol.UNDEFINED)): str,
             vol.Required(CONF_DOOR_ID, default=d.get(CONF_DOOR_ID, DEFAULT_DOOR_ID)): int,
+            vol.Optional(
+                CONF_SCAN_INTERVAL,
+                default=d.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+            ): vol.All(int, vol.Range(min=1, max=300)),
             vol.Optional(CONF_HA_URL, default=d.get(CONF_HA_URL, vol.UNDEFINED)): str,
         }
     )
@@ -140,6 +146,15 @@ class ControlIDOptionsFlowHandler(config_entries.OptionsFlow):
                             self.config_entry.data[CONF_DOOR_ID],
                         ),
                     ): int,
+                    vol.Optional(
+                        CONF_SCAN_INTERVAL,
+                        default=self.config_entry.options.get(
+                            CONF_SCAN_INTERVAL,
+                            self.config_entry.data.get(
+                                CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+                            ),
+                        ),
+                    ): vol.All(int, vol.Range(min=1, max=300)),
                     vol.Optional(
                         CONF_HA_URL,
                         default=self.config_entry.options.get(

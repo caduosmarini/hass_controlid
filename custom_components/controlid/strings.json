@@ -11,6 +11,7 @@
           "username": "Username",
           "password": "Password",
           "door_id": "Door ID",
+          "scan_interval": "Polling interval (seconds)",
           "ha_url": "Home Assistant URL (optional, for real-time monitor)"
         }
       }
@@ -26,6 +27,7 @@
         "title": "Control iD options",
         "data": {
           "door_id": "Door ID",
+          "scan_interval": "Polling interval (seconds)",
           "ha_url": "Home Assistant URL (for real-time monitor)"
         }
       }

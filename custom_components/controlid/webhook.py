@@ -25,6 +25,7 @@ def async_register_views(
     """Register the HTTP views for this config entry."""
     hass.http.register_view(ControlIDDoorView(entry_id, coordinator))
     hass.http.register_view(ControlIDDaoView(entry_id, coordinator))
+    hass.http.register_view(ControlIDAccessPhotoView(entry_id, coordinator))
     _LOGGER.debug("Registered Control iD webhook views for entry %s", entry_id)
 
 
@@ -92,5 +93,40 @@ class ControlIDDaoView(HomeAssistantView):
                 values = change.get("values", {})
                 _LOGGER.debug("Monitor access_log event: %s", values)
                 self._coordinator.handle_access_log_event(values)
+
+        return web.Response(status=200)
+
+
+class ControlIDAccessPhotoView(HomeAssistantView):
+    """Handle POST /api/controlid/{entry_id}/notifications/access_photo."""
+
+    requires_auth = False
+    url = WEBHOOK_BASE + "/{entry_id}/notifications/access_photo"
+    name = "api:controlid:notifications:access_photo"
+
+    def __init__(
+        self, entry_id: str, coordinator: ControlIDDataUpdateCoordinator
+    ) -> None:
+        self._entry_id = entry_id
+        self._coordinator = coordinator
+
+    async def post(self, request: web.Request, entry_id: str) -> web.Response:
+        if entry_id != self._entry_id:
+            return web.Response(status=404)
+
+        try:
+            data: dict[str, Any] = await request.json()
+        except Exception:
+            return web.Response(status=400)
+
+        photo_b64 = data.get("access_photo")
+        user_id = int(data.get("user_id", 0))
+        if photo_b64:
+            _LOGGER.debug(
+                "Monitor access_photo event: user_id=%s, photo_len=%s",
+                user_id,
+                len(photo_b64),
+            )
+            self._coordinator.handle_access_photo(photo_b64, user_id)
 
         return web.Response(status=200)
