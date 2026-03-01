@@ -119,7 +119,7 @@ class ControlIDApiClient:
 
     async def async_get_door_state(self) -> bool:
         """Return True if the door is currently open."""
-        data = await self._post("door_state.fcgi")
+        data = await self._post("doors_state.fcgi")
         for door in data.get("doors", []):
             if door.get("id") == self.door_id:
                 return bool(door.get("open", False))
