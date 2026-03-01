@@ -36,22 +36,32 @@ if ($originUrl -notmatch [regex]::Escape($expectedRepo)) {
     Write-Warning "Origin atual nao parece ser '$expectedRepo'. URL: $originUrl"
 }
 
+$repoRoot = git rev-parse --show-toplevel
+$manifestPath = Join-Path $repoRoot "custom_components" "controlid" "manifest.json"
+if (-not (Test-Path $manifestPath)) {
+    Write-Error "manifest.json nao encontrado em: $manifestPath"
+    exit 1
+}
+
+$manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+$tagName = $manifest.version
+
+if ([string]::IsNullOrWhiteSpace($tagName)) {
+    Write-Error "Campo 'version' vazio no manifest.json."
+    exit 1
+}
+
 $lastTag = (git tag --sort=-creatordate) | Select-Object -First 1
 if ([string]::IsNullOrWhiteSpace($lastTag)) {
     $lastTag = "<nenhuma>"
 }
 
 Write-Host "Ultima tag: $lastTag"
-$tagName = Read-Host "Nome da nova tag/release"
-
-if ([string]::IsNullOrWhiteSpace($tagName)) {
-    Write-Error "Nome da tag nao pode ser vazio."
-    exit 1
-}
+Write-Host "Versao no manifest.json: $tagName"
 
 $existingTag = git tag --list $tagName
 if (-not [string]::IsNullOrWhiteSpace($existingTag)) {
-    Write-Error "Tag '$tagName' ja existe."
+    Write-Error "Tag '$tagName' ja existe. Atualize a versao no manifest.json antes de criar uma nova release."
     exit 1
 }
 
@@ -62,7 +72,7 @@ if (-not [string]::IsNullOrWhiteSpace($status)) {
 }
 
 git push origin HEAD
-git tag -a $tagName -m $tagName
+git tag -a $tagName -m "Release $tagName"
 git push origin $tagName
 gh release create $tagName --title $tagName --generate-notes
 

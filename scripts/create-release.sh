@@ -10,6 +10,7 @@ require_command() {
 
 require_command git
 require_command gh
+require_command jq
 
 if ! git rev-parse --is-inside-work-tree &>/dev/null; then
     echo "Execute este script dentro de um repositorio git." >&2
@@ -26,19 +27,27 @@ if [[ "$origin_url" != *"$expected_repo"* ]]; then
     echo "Aviso: Origin atual nao parece ser '$expected_repo'. URL: $origin_url" >&2
 fi
 
+repo_root=$(git rev-parse --show-toplevel)
+manifest_path="$repo_root/custom_components/controlid/manifest.json"
+if [[ ! -f "$manifest_path" ]]; then
+    echo "manifest.json nao encontrado em: $manifest_path" >&2
+    exit 1
+fi
+
+tag_name=$(jq -r '.version' "$manifest_path")
+if [[ -z "$tag_name" || "$tag_name" == "null" ]]; then
+    echo "Campo 'version' vazio no manifest.json." >&2
+    exit 1
+fi
+
 last_tag=$(git tag --sort=-creatordate 2>/dev/null | head -n1)
 [[ -z "$last_tag" ]] && last_tag="<nenhuma>"
 
 echo "Ultima tag: $last_tag"
-read -r -p "Nome da nova tag/release: " tag_name
-
-if [[ -z "${tag_name// }" ]]; then
-    echo "Nome da tag nao pode ser vazio." >&2
-    exit 1
-fi
+echo "Versao no manifest.json: $tag_name"
 
 if [[ -n "$(git tag -l "$tag_name")" ]]; then
-    echo "Tag '$tag_name' ja existe." >&2
+    echo "Tag '$tag_name' ja existe. Atualize a versao no manifest.json antes de criar uma nova release." >&2
     exit 1
 fi
 
@@ -49,7 +58,7 @@ if [[ -n "$status" ]]; then
 fi
 
 git push origin HEAD
-git tag -a "$tag_name" -m "$tag_name"
+git tag -a "$tag_name" -m "Release $tag_name"
 git push origin "$tag_name"
 gh release create "$tag_name" --title "$tag_name" --generate-notes
 
