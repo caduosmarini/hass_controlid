@@ -7,11 +7,12 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import ControlIDConfigEntry
-from .const import CONF_NAME
+from .const import CONF_HOST, CONF_NAME, DOMAIN
 from .coordinator import ControlIDDataUpdateCoordinator
 
 
@@ -32,6 +33,7 @@ class ControlIDDoorSensor(
 
     _attr_has_entity_name = True
     _attr_device_class = BinarySensorDeviceClass.DOOR
+    _attr_name = "Porta"
 
     def __init__(
         self,
@@ -39,9 +41,13 @@ class ControlIDDoorSensor(
         entry: ControlIDConfigEntry,
     ) -> None:
         super().__init__(coordinator)
-        base = entry.data.get(CONF_NAME, "Control iD")
-        self._attr_name = f"{base} Porta"
         self._attr_unique_id = f"{entry.entry_id}_door_sensor"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=entry.data.get(CONF_NAME, "Control iD"),
+            manufacturer="Control iD",
+            configuration_url=f"http://{entry.data.get(CONF_HOST, '')}",
+        )
 
     @property
     def is_on(self) -> bool | None:

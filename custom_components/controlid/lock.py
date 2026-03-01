@@ -6,12 +6,13 @@ import logging
 
 from homeassistant.components.lock import LockEntity
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import ControlIDConfigEntry
 from .api import ControlIDApiError
-from .const import CONF_NAME
+from .const import CONF_HOST, CONF_NAME, DOMAIN
 from .coordinator import ControlIDDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ class ControlIDLock(CoordinatorEntity[ControlIDDataUpdateCoordinator], LockEntit
     """
 
     _attr_has_entity_name = True
+    _attr_name = "Fechadura"
 
     def __init__(
         self,
@@ -42,8 +44,13 @@ class ControlIDLock(CoordinatorEntity[ControlIDDataUpdateCoordinator], LockEntit
         entry: ControlIDConfigEntry,
     ) -> None:
         super().__init__(coordinator)
-        self._attr_name = entry.data.get(CONF_NAME, "Control iD")
         self._attr_unique_id = f"{entry.entry_id}_door_lock"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=entry.data.get(CONF_NAME, "Control iD"),
+            manufacturer="Control iD",
+            configuration_url=f"http://{entry.data.get(CONF_HOST, '')}",
+        )
 
     @property
     def is_locked(self) -> bool | None:

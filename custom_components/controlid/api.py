@@ -120,20 +120,24 @@ class ControlIDApiClient:
     async def async_get_door_state(self) -> bool:
         """Return True if the door is currently open."""
         data = await self._post("doors_state.fcgi")
+        _LOGGER.debug("doors_state response: %s", data)
         for door in data.get("doors", []):
             if door.get("id") == self.door_id:
                 return bool(door.get("open", False))
         for sbox in data.get("sec_boxes", []):
             if sbox.get("id") == self.door_id:
                 return bool(sbox.get("open", False))
+        _LOGGER.warning(
+            "Door id=%s not found in doors_state response: %s", self.door_id, data
+        )
         return False
 
     async def async_open_door(self) -> None:
         """Trigger the relay to open the door."""
-        await self._post(
-            "execute_actions.fcgi",
-            {"actions": [{"action": "door", "parameters": f"door={self.door_id}"}]},
-        )
+        payload = {"actions": [{"action": "door", "parameters": f"door={self.door_id}"}]}
+        _LOGGER.debug("execute_actions request: %s", payload)
+        result = await self._post("execute_actions.fcgi", payload)
+        _LOGGER.debug("execute_actions response: %s", result)
 
     async def async_get_access_logs(self, limit: int = 10) -> list[dict[str, Any]]:
         """Load the most recent access_logs from the device."""

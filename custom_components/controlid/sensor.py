@@ -7,11 +7,12 @@ from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import ControlIDConfigEntry
-from .const import ACCESS_EVENT_LABELS, CONF_NAME
+from .const import ACCESS_EVENT_LABELS, CONF_HOST, CONF_NAME, DOMAIN
 from .coordinator import ControlIDDataUpdateCoordinator
 
 
@@ -32,6 +33,7 @@ class ControlIDAccessSensor(
 
     _attr_has_entity_name = True
     _attr_icon = "mdi:door-sliding-lock"
+    _attr_name = "Último Acesso"
 
     def __init__(
         self,
@@ -39,9 +41,13 @@ class ControlIDAccessSensor(
         entry: ControlIDConfigEntry,
     ) -> None:
         super().__init__(coordinator)
-        base = entry.data.get(CONF_NAME, "Control iD")
-        self._attr_name = f"{base} Último Acesso"
         self._attr_unique_id = f"{entry.entry_id}_last_access"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=entry.data.get(CONF_NAME, "Control iD"),
+            manufacturer="Control iD",
+            configuration_url=f"http://{entry.data.get(CONF_HOST, '')}",
+        )
 
     @property
     def _last(self) -> dict[str, Any] | None:
