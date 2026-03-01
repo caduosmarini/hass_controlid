@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import voluptuous as vol
@@ -23,6 +24,24 @@ from .const import (
     DEFAULT_PORT,
     DOMAIN,
 )
+
+_LOGGER = logging.getLogger(__name__)
+
+
+def _build_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+    """Build the config form schema, using *defaults* to keep previous values."""
+    d = defaults or {}
+    return vol.Schema(
+        {
+            vol.Required(CONF_NAME, default=d.get(CONF_NAME, DEFAULT_NAME)): str,
+            vol.Required(CONF_HOST, default=d.get(CONF_HOST, vol.UNDEFINED)): str,
+            vol.Required(CONF_PORT, default=d.get(CONF_PORT, DEFAULT_PORT)): int,
+            vol.Required(CONF_USERNAME, default=d.get(CONF_USERNAME, vol.UNDEFINED)): str,
+            vol.Required(CONF_PASSWORD, default=d.get(CONF_PASSWORD, vol.UNDEFINED)): str,
+            vol.Required(CONF_DOOR_ID, default=d.get(CONF_DOOR_ID, DEFAULT_DOOR_ID)): int,
+            vol.Optional(CONF_HA_URL, default=d.get(CONF_HA_URL, vol.UNDEFINED)): str,
+        }
+    )
 
 
 class ControlIDConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -51,17 +70,7 @@ class ControlIDConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
-                    vol.Required(CONF_HOST): str,
-                    vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-                    vol.Required(CONF_USERNAME): str,
-                    vol.Required(CONF_PASSWORD): str,
-                    vol.Required(CONF_DOOR_ID, default=DEFAULT_DOOR_ID): int,
-                    vol.Optional(CONF_HA_URL): str,
-                }
-            ),
+            data_schema=_build_schema(user_input),
             errors=errors,
         )
 
@@ -69,7 +78,9 @@ class ControlIDConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any]
     ) -> str | None:
         """Validate connectivity. Returns an error key or None on success."""
-        session = aiohttp_client.async_get_clientsession(self.hass)
+        session = aiohttp_client.async_get_clientsession(
+            self.hass, verify_ssl=False
+        )
         client = ControlIDApiClient(
             session=session,
             host=user_input[CONF_HOST],
@@ -80,14 +91,20 @@ class ControlIDConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         try:
             await client.async_authenticate()
-        except ControlIDAuthError:
+        except ControlIDAuthError as err:
+            _LOGGER.warning("Control iD auth failed: %s", err)
             return "invalid_auth"
-        except ControlIDApiError:
+        except ControlIDApiError as err:
+            _LOGGER.warning("Control iD connection failed: %s", err)
+            return "cannot_connect"
+        except Exception as err:
+            _LOGGER.exception("Unexpected error validating Control iD: %s", err)
             return "cannot_connect"
 
         try:
             await client.async_get_door_state()
-        except ControlIDApiError:
+        except ControlIDApiError as err:
+            _LOGGER.warning("Control iD door_state failed: %s", err)
             return "cannot_connect"
 
         return None

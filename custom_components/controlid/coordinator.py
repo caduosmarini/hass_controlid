@@ -43,7 +43,7 @@ class ControlIDDataUpdateCoordinator(DataUpdateCoordinator[ControlIDData]):
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         self.config_entry = config_entry
-        session = aiohttp_client.async_get_clientsession(hass)
+        session = aiohttp_client.async_get_clientsession(hass, verify_ssl=False)
         self.api = ControlIDApiClient(
             session=session,
             host=config_entry.data[CONF_HOST],

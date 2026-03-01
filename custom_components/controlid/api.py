@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from aiohttp import ClientError, ClientSession
+from aiohttp import ClientError, ClientSession, ClientTimeout
 
 _LOGGER = logging.getLogger(__name__)
+
+REQUEST_TIMEOUT = ClientTimeout(total=10)
 
 
 class ControlIDApiError(Exception):
@@ -48,33 +51,45 @@ class ControlIDApiClient:
         if not self._session_id and endpoint != "login.fcgi":
             await self.async_authenticate()
 
+        url = self._url(endpoint)
+        body = payload or {}
+
         try:
             resp = await self.session.post(
-                self._url(endpoint),
-                json=payload or {},
-                ssl=False,
+                url, json=body, ssl=False, timeout=REQUEST_TIMEOUT,
             )
+        except asyncio.TimeoutError as err:
+            raise ControlIDApiError(
+                f"Timeout connecting to {self.host}:{self.port}/{endpoint}"
+            ) from err
         except ClientError as err:
+            _LOGGER.debug("ClientError on %s: %s", endpoint, err)
             raise ControlIDApiError(
                 f"Connection error on {endpoint}: {err}"
             ) from err
+        except Exception as err:
+            _LOGGER.debug("Unexpected error on %s: %s", endpoint, err)
+            raise ControlIDApiError(
+                f"Unexpected error on {endpoint}: {err}"
+            ) from err
 
         if resp.status in {401, 403} and endpoint != "login.fcgi":
+            _LOGGER.debug("Session expired, re-authenticating")
             self._session_id = None
             await self.async_authenticate()
+            url = self._url(endpoint)
             try:
                 resp = await self.session.post(
-                    self._url(endpoint),
-                    json=payload or {},
-                    ssl=False,
+                    url, json=body, ssl=False, timeout=REQUEST_TIMEOUT,
                 )
-            except ClientError as err:
+            except (asyncio.TimeoutError, ClientError, Exception) as err:
                 raise ControlIDApiError(
                     f"Connection error on {endpoint} after reauth: {err}"
                 ) from err
 
         if resp.status >= 400:
             text = await resp.text()
+            _LOGGER.debug("HTTP %s on %s: %s", resp.status, endpoint, text)
             raise ControlIDApiError(
                 f"HTTP {resp.status} on {endpoint}: {text}"
             )
@@ -87,6 +102,7 @@ class ControlIDApiClient:
     async def async_authenticate(self) -> None:
         """Authenticate via POST /login.fcgi and cache the session id."""
         self._session_id = None
+        _LOGGER.debug("Authenticating with %s:%s", self.host, self.port)
         try:
             data = await self._post(
                 "login.fcgi", {"login": self.login, "password": self.password}
@@ -96,6 +112,7 @@ class ControlIDApiClient:
 
         session_id = data.get("session")
         if not session_id:
+            _LOGGER.debug("Login response without session key: %s", data)
             raise ControlIDAuthError("No session returned from login.fcgi")
         self._session_id = session_id
         _LOGGER.debug("Authenticated with Control iD device at %s", self.host)
