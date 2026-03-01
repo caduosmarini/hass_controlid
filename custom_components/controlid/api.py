@@ -236,6 +236,49 @@ class ControlIDApiClient:
             if "id" in u
         }
 
+    async def async_get_user_image(self, user_id: int) -> bytes | None:
+        """Fetch a user's registered photo as raw JPEG bytes."""
+        if not self._session_id:
+            await self.async_authenticate()
+
+        url = f"{self._base_url}/user_get_image.fcgi?user_id={user_id}&session={self._session_id}"
+        try:
+            resp = await self.session.get(url, ssl=False, timeout=REQUEST_TIMEOUT)
+        except (asyncio.TimeoutError, ClientError) as err:
+            raise ControlIDApiError(f"Error fetching user image: {err}") from err
+
+        if resp.status >= 400:
+            _LOGGER.debug("user_get_image HTTP %s for user_id=%s", resp.status, user_id)
+            return None
+
+        content_type = resp.content_type or ""
+        if "image" in content_type:
+            return await resp.read()
+
+        _LOGGER.debug(
+            "user_get_image unexpected content_type=%s for user_id=%s",
+            content_type,
+            user_id,
+        )
+        return None
+
+    async def async_get_monitor_config(self) -> dict[str, Any]:
+        """Read back the current monitor configuration from the device."""
+        data = await self._post(
+            "get_configuration.fcgi",
+            {
+                "monitor": [
+                    "hostname",
+                    "port",
+                    "path",
+                    "request_timeout",
+                    "enable_photo_upload",
+                    "alive_interval",
+                ]
+            },
+        )
+        return data.get("monitor", {})
+
     async def async_configure_monitor(
         self, hostname: str, port: str, path: str
     ) -> None:
@@ -248,9 +291,37 @@ class ControlIDApiClient:
                     "hostname": hostname,
                     "port": port,
                     "path": path,
+                    "enable_photo_upload": True,
                 }
             },
         )
         _LOGGER.info(
-            "Configured Control iD monitor -> %s:%s/%s", hostname, port, path
+            "Configured Control iD monitor -> %s:%s/%s (photo_upload=on)",
+            hostname,
+            port,
+            path,
         )
+
+    async def async_verify_monitor(
+        self, expected_hostname: str, expected_port: str, expected_path: str
+    ) -> bool:
+        """Read back monitor config and verify it matches what we set."""
+        cfg = await self.async_get_monitor_config()
+        _LOGGER.debug("Current monitor config on device: %s", cfg)
+
+        ok = (
+            cfg.get("hostname") == expected_hostname
+            and str(cfg.get("port", "")) == expected_port
+            and cfg.get("path") == expected_path
+        )
+        if ok:
+            _LOGGER.info("Monitor config verified OK on device")
+        else:
+            _LOGGER.warning(
+                "Monitor config mismatch! Expected %s:%s/%s, got %s",
+                expected_hostname,
+                expected_port,
+                expected_path,
+                cfg,
+            )
+        return ok

@@ -27,7 +27,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ControlIDConfigEntry) ->
     ha_url: str = entry.data.get(CONF_HA_URL, "") or entry.options.get(CONF_HA_URL, "")
     if ha_url:
         async_register_views(hass, entry.entry_id, coordinator)
-        await _configure_device_monitor(coordinator, ha_url, entry.entry_id)
+        await _configure_and_verify_monitor(coordinator, ha_url, entry.entry_id)
+    else:
+        _LOGGER.info(
+            "No HA URL configured — running in polling-only mode "
+            "(no real-time monitor events)"
+        )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
@@ -38,18 +43,37 @@ async def async_unload_entry(hass: HomeAssistant, entry: ControlIDConfigEntry) -
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
-async def _configure_device_monitor(
+async def _configure_and_verify_monitor(
     coordinator: ControlIDDataUpdateCoordinator,
     ha_url: str,
     entry_id: str,
 ) -> None:
-    """Tell the Control iD device to push monitor events to Home Assistant."""
+    """Configure the device monitor and verify it took effect."""
     try:
         parsed = urlparse(ha_url)
         hostname = parsed.hostname or ha_url
         port = str(parsed.port or 8123)
         path = get_monitor_path(entry_id)
+
+        _LOGGER.info(
+            "Configuring Control iD monitor -> %s:%s/%s",
+            hostname,
+            port,
+            path,
+        )
         await coordinator.api.async_configure_monitor(hostname, port, path)
+
+        ok = await coordinator.api.async_verify_monitor(hostname, port, path)
+        if ok:
+            _LOGGER.info(
+                "Control iD monitor configured and verified — "
+                "waiting for device_is_alive pings"
+            )
+        else:
+            _LOGGER.warning(
+                "Control iD monitor configured but verification failed — "
+                "real-time events may not work"
+            )
     except Exception:
         _LOGGER.warning(
             "Failed to configure Control iD monitor for %s; "

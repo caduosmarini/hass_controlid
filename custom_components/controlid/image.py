@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from homeassistant.components.image import ImageEntity
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -48,15 +46,30 @@ class ControlIDAccessPhoto(
             configuration_url=f"http://{entry.data.get(CONF_HOST, '')}",
         )
         self._cached_image: bytes | None = None
+        self._last_seen_user_id: int | None = None
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        if self.coordinator.data is not None:
-            photo = self.coordinator.data.last_photo
-            updated = self.coordinator.data.last_photo_updated
-            if updated and updated != self._attr_image_last_updated:
-                self._attr_image_last_updated = updated
-                self._cached_image = photo
+        if self.coordinator.data is None:
+            super()._handle_coordinator_update()
+            return
+
+        photo = self.coordinator.data.last_photo
+        updated = self.coordinator.data.last_photo_updated
+        if updated and updated != self._attr_image_last_updated:
+            self._attr_image_last_updated = updated
+            self._cached_image = photo
+
+        logs = self.coordinator.data.access_logs
+        if logs:
+            newest_uid = int(logs[0].get("user_id", 0))
+            if newest_uid > 0 and newest_uid != self._last_seen_user_id:
+                self._last_seen_user_id = newest_uid
+                if not self._cached_image:
+                    self.hass.async_create_task(
+                        self.coordinator.async_update_photo_for_user(newest_uid)
+                    )
+
         super()._handle_coordinator_update()
 
     async def async_image(self) -> bytes | None:

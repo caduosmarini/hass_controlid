@@ -12,7 +12,14 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import ControlIDConfigEntry
-from .const import ACCESS_EVENT_LABELS, CONF_HOST, CONF_NAME, DOMAIN
+from .const import (
+    ACCESS_EVENT_LABELS,
+    ACCESS_EVENTS_RELEVANT,
+    CONF_HOST,
+    CONF_NAME,
+    DOMAIN,
+    EVENT_ACCESS_GRANTED,
+)
 from .coordinator import ControlIDDataUpdateCoordinator
 
 
@@ -51,23 +58,37 @@ class ControlIDAccessSensor(
 
     @property
     def _last(self) -> dict[str, Any] | None:
+        """Return the most recent *relevant* access event, or any event as fallback."""
         if self.coordinator.data is None:
             return None
         logs = self.coordinator.data.access_logs
-        return logs[0] if logs else None
+        if not logs:
+            return None
+        for log in logs:
+            if int(log.get("event", 0)) in ACCESS_EVENTS_RELEVANT:
+                return log
+        return logs[0]
+
+    def _event_label(self, log: dict[str, Any]) -> str:
+        event_id = int(log.get("event", 0))
+        return ACCESS_EVENT_LABELS.get(event_id, f"Evento {event_id}")
+
+    def _user_name(self, log: dict[str, Any]) -> str:
+        uid = int(log.get("user_id", 0))
+        return self.coordinator.data.users.get(uid, "") if uid else ""
 
     @property
     def native_value(self) -> str | None:
-        """State: human-readable description of the last event."""
         entry = self._last
         if entry is None:
             return None
         event_id = int(entry.get("event", 0))
-        label = ACCESS_EVENT_LABELS.get(event_id, f"Evento {event_id}")
-        user_id = int(entry.get("user_id", 0))
-        user_name = self.coordinator.data.users.get(user_id, "")
-        if user_name:
-            return f"{label} - {user_name}"
+        name = self._user_name(entry)
+        if event_id == EVENT_ACCESS_GRANTED and name:
+            return name
+        label = self._event_label(entry)
+        if name:
+            return f"{label} - {name}"
         return label
 
     @property
@@ -77,6 +98,14 @@ class ControlIDAccessSensor(
         if entry is None:
             return attrs
 
+        event_id = int(entry.get("event", 0))
+        attrs["event"] = self._event_label(entry)
+        attrs["event_id"] = event_id
+
+        user_id = int(entry.get("user_id", 0))
+        attrs["user_id"] = user_id
+        attrs["user_name"] = self._user_name(entry)
+
         ts = entry.get("time")
         if ts:
             try:
@@ -84,21 +113,26 @@ class ControlIDAccessSensor(
             except (ValueError, OSError):
                 attrs["time"] = ts
 
-        attrs["event_id"] = entry.get("event")
-        attrs["user_id"] = entry.get("user_id")
-        user_id = int(entry.get("user_id", 0))
-        attrs["user_name"] = self.coordinator.data.users.get(user_id, "")
         attrs["portal_id"] = entry.get("portal_id")
+        attrs["identifier_id"] = entry.get("identifier_id")
         attrs["card_value"] = entry.get("card_value")
 
         recent: list[dict[str, Any]] = []
         for log in self.coordinator.data.access_logs:
-            event_id = int(log.get("event", 0))
             uid = int(log.get("user_id", 0))
+            log_ts = log.get("time")
+            ts_str = None
+            if log_ts:
+                try:
+                    ts_str = datetime.fromtimestamp(
+                        int(log_ts), tz=UTC
+                    ).isoformat()
+                except (ValueError, OSError):
+                    ts_str = str(log_ts)
             recent.append({
-                "event": ACCESS_EVENT_LABELS.get(event_id, f"Evento {event_id}"),
-                "user": self.coordinator.data.users.get(uid, str(uid)),
-                "time": log.get("time"),
+                "event": self._event_label(log),
+                "user": self.coordinator.data.users.get(uid, str(uid)) if uid else "",
+                "time": ts_str,
             })
         attrs["recent_access"] = recent
         return attrs

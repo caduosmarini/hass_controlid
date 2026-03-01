@@ -20,21 +20,22 @@ PLATFORMS = ["lock", "binary_sensor", "sensor", "image"]
 ACCESS_LOG_LIMIT = 10
 
 ACCESS_EVENT_LABELS: dict[int, str] = {
-    1: "Interfone",
-    2: "Sem resposta",
-    3: "Entrada cancelada",
-    4: "Acesso via WEB",
-    5: "Acesso via botão",
-    6: "Acesso não identificado",
-    7: "Usuário não é administrador",
+    1: "Equipamento inválido",
+    2: "Parâmetros de identificação inválidos",
+    3: "Não identificado",
+    4: "Identificação pendente",
+    5: "Tempo de identificação esgotado",
+    6: "Acesso Negado",
+    7: "Acesso Concedido",
     8: "Acesso pendente",
-    9: "Acesso Concedido",
-    10: "Acesso Negado",
-    11: "Tempo de identificação expirado",
-    12: "Identificação pendente",
-    13: "Não identificado",
-    14: "Parâmetros de regra inválidos",
-    15: "Dispositivo inválido",
+    9: "Usuário não é administrador",
+    10: "Acesso não identificado",
+    11: "Acesso por botoeira",
+    12: "Acesso pela interface web",
+    13: "Desistência de entrada",
+    14: "Sem resposta",
+    15: "Interfonia",
 }
 
-ACCESS_EVENTS_RELEVANT = {1, 4, 5, 6, 9, 10, 13}
+EVENT_ACCESS_GRANTED = 7
+ACCESS_EVENTS_RELEVANT = {6, 7, 8, 10, 11, 12, 15}
