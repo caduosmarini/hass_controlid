@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+
 from homeassistant.components.lock import LockEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -13,10 +14,12 @@ from .api import ControlIDApiError
 from .const import CONF_NAME
 from .coordinator import ControlIDDataUpdateCoordinator
 
+_LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: ControlIDConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Control iD lock from config entry."""
@@ -25,7 +28,11 @@ async def async_setup_entry(
 
 
 class ControlIDLock(CoordinatorEntity[ControlIDDataUpdateCoordinator], LockEntity):
-    """Representation of a Control iD door lock."""
+    """A Control iD door represented as a lock.
+
+    Unlock triggers the relay (opens the door).
+    Lock is a no-op: the door locks physically when the sensor detects it closed.
+    """
 
     _attr_has_entity_name = True
 
@@ -35,28 +42,24 @@ class ControlIDLock(CoordinatorEntity[ControlIDDataUpdateCoordinator], LockEntit
         entry: ControlIDConfigEntry,
     ) -> None:
         super().__init__(coordinator)
-        self._entry = entry
-        self._attr_name = entry.data[CONF_NAME]
+        self._attr_name = entry.data.get(CONF_NAME, "Control iD")
         self._attr_unique_id = f"{entry.entry_id}_door_lock"
 
     @property
     def is_locked(self) -> bool | None:
-        """Return true if lock is locked."""
-        return self.coordinator.data
+        """Locked when the door is closed (not open)."""
+        if self.coordinator.data is None:
+            return None
+        return not self.coordinator.data.door_open
 
     async def async_lock(self, **kwargs) -> None:
-        """Lock the device."""
-        try:
-            await self.coordinator.api.async_set_locked(True)
-            await self.coordinator.async_request_refresh()
-        except ControlIDApiError:
-            await self.coordinator.async_refresh()
-            raise
+        """No-op: the door locks physically when closed."""
+        _LOGGER.debug("Lock command ignored; door locks when physically closed")
 
     async def async_unlock(self, **kwargs) -> None:
-        """Unlock the device."""
+        """Trigger the relay to open the door."""
         try:
-            await self.coordinator.api.async_set_locked(False)
+            await self.coordinator.api.async_open_door()
             await self.coordinator.async_request_refresh()
         except ControlIDApiError:
             await self.coordinator.async_refresh()

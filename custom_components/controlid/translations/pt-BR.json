@@ -11,12 +11,13 @@
           "username": "Usuário",
           "password": "Senha",
           "door_id": "ID da porta",
-          "verify_ssl": "Validar certificado SSL"
+          "ha_url": "URL do Home Assistant (opcional, para monitor em tempo real)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Falha ao conectar ou autenticar"
+      "cannot_connect": "Falha ao conectar ao dispositivo",
+      "invalid_auth": "Usuário ou senha inválidos"
     }
   },
   "options": {
@@ -24,7 +25,8 @@
       "init": {
         "title": "Opções do Control iD",
         "data": {
-          "door_id": "ID da porta"
+          "door_id": "ID da porta",
+          "ha_url": "URL do Home Assistant (para monitor em tempo real)"
         }
       }
     }

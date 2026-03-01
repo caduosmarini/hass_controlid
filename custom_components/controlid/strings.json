@@ -11,12 +11,13 @@
           "username": "Username",
           "password": "Password",
           "door_id": "Door ID",
-          "verify_ssl": "Verify SSL certificate"
+          "ha_url": "Home Assistant URL (optional, for real-time monitor)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect or authenticate"
+      "cannot_connect": "Failed to connect to the device",
+      "invalid_auth": "Invalid username or password"
     }
   },
   "options": {
@@ -24,7 +25,8 @@
       "init": {
         "title": "Control iD options",
         "data": {
-          "door_id": "Door ID"
+          "door_id": "Door ID",
+          "ha_url": "Home Assistant URL (for real-time monitor)"
         }
       }
     }

@@ -1,11 +1,14 @@
-"""API client for Control iD devices."""
+"""API client for Control iD devices using the real .fcgi endpoints."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, field
 from typing import Any
 
-from aiohttp import ClientError, ClientResponseError, ClientSession
+from aiohttp import ClientError, ClientSession
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class ControlIDApiError(Exception):
@@ -18,96 +21,145 @@ class ControlIDAuthError(ControlIDApiError):
 
 @dataclass
 class ControlIDApiClient:
-    """Simple client for the Control iD Access API."""
+    """Client for the Control iD Access API (.fcgi endpoints)."""
 
     session: ClientSession
     host: str
     port: int
-    username: str
+    login: str
     password: str
-    verify_ssl: bool
     door_id: int
 
-    _token: str | None = None
+    _session_id: str | None = field(default=None, repr=False)
 
     @property
     def _base_url(self) -> str:
         scheme = "https" if self.port == 443 else "http"
         return f"{scheme}://{self.host}:{self.port}"
 
-    async def async_authenticate(self) -> None:
-        """Authenticate against the device and cache token."""
-        payload = {"username": self.username, "password": self.password}
-        try:
-            response = await self.session.post(
-                f"{self._base_url}/api/login",
-                json=payload,
-                ssl=self.verify_ssl,
-            )
-            response.raise_for_status()
-            data = await response.json()
-        except ClientResponseError as err:
-            if err.status in {401, 403}:
-                raise ControlIDAuthError("Authentication failed") from err
-            raise ControlIDApiError(f"HTTP error while authenticating: {err.status}") from err
-        except ClientError as err:
-            raise ControlIDApiError("Unable to connect to Control iD device") from err
+    def _url(self, endpoint: str) -> str:
+        url = f"{self._base_url}/{endpoint}"
+        if self._session_id:
+            url += f"?session={self._session_id}"
+        return url
 
-        token = data.get("token")
-        if not token:
-            raise ControlIDAuthError("Missing token in login response")
-        self._token = token
+    async def _post(self, endpoint: str, payload: dict | None = None) -> dict[str, Any]:
+        """POST to an .fcgi endpoint with auto-reauth on session expiry."""
+        if not self._session_id and endpoint != "login.fcgi":
+            await self.async_authenticate()
+
+        try:
+            resp = await self.session.post(
+                self._url(endpoint),
+                json=payload or {},
+                ssl=False,
+            )
+        except ClientError as err:
+            raise ControlIDApiError(
+                f"Connection error on {endpoint}: {err}"
+            ) from err
+
+        if resp.status in {401, 403} and endpoint != "login.fcgi":
+            self._session_id = None
+            await self.async_authenticate()
+            try:
+                resp = await self.session.post(
+                    self._url(endpoint),
+                    json=payload or {},
+                    ssl=False,
+                )
+            except ClientError as err:
+                raise ControlIDApiError(
+                    f"Connection error on {endpoint} after reauth: {err}"
+                ) from err
+
+        if resp.status >= 400:
+            text = await resp.text()
+            raise ControlIDApiError(
+                f"HTTP {resp.status} on {endpoint}: {text}"
+            )
+
+        try:
+            return await resp.json(content_type=None)
+        except Exception:
+            return {}
+
+    async def async_authenticate(self) -> None:
+        """Authenticate via POST /login.fcgi and cache the session id."""
+        self._session_id = None
+        try:
+            data = await self._post(
+                "login.fcgi", {"login": self.login, "password": self.password}
+            )
+        except ControlIDApiError as err:
+            raise ControlIDAuthError(f"Authentication failed: {err}") from err
+
+        session_id = data.get("session")
+        if not session_id:
+            raise ControlIDAuthError("No session returned from login.fcgi")
+        self._session_id = session_id
+        _LOGGER.debug("Authenticated with Control iD device at %s", self.host)
 
     async def async_get_door_state(self) -> bool:
-        """Return whether door is currently locked."""
-        if not self._token:
-            await self.async_authenticate()
+        """Return True if the door is currently open."""
+        data = await self._post("door_state.fcgi")
+        for door in data.get("doors", []):
+            if door.get("id") == self.door_id:
+                return bool(door.get("open", False))
+        for sbox in data.get("sec_boxes", []):
+            if sbox.get("id") == self.door_id:
+                return bool(sbox.get("open", False))
+        return False
 
-        headers = {"Authorization": f"Bearer {self._token}"}
-        try:
-            response = await self.session.get(
-                f"{self._base_url}/api/doors/{self.door_id}",
-                headers=headers,
-                ssl=self.verify_ssl,
-            )
-            if response.status in {401, 403}:
-                self._token = None
-                await self.async_authenticate()
-                headers = {"Authorization": f"Bearer {self._token}"}
-                response = await self.session.get(
-                    f"{self._base_url}/api/doors/{self.door_id}",
-                    headers=headers,
-                    ssl=self.verify_ssl,
-                )
-            response.raise_for_status()
-            data: dict[str, Any] = await response.json()
-        except ClientError as err:
-            raise ControlIDApiError("Unable to read door state") from err
+    async def async_open_door(self) -> None:
+        """Trigger the relay to open the door."""
+        await self._post(
+            "execute_actions.fcgi",
+            {"actions": [{"action": "door", "parameters": f"door={self.door_id}"}]},
+        )
 
-        return bool(data.get("locked", True))
+    async def async_get_access_logs(self, limit: int = 10) -> list[dict[str, Any]]:
+        """Load the most recent access_logs from the device."""
+        data = await self._post(
+            "load_objects.fcgi",
+            {
+                "object": "access_logs",
+                "order": ["descending", "id"],
+                "limit": limit,
+            },
+        )
+        return data.get("access_logs", [])
 
-    async def async_set_locked(self, locked: bool) -> None:
-        """Lock or unlock door."""
-        if not self._token:
-            await self.async_authenticate()
+    async def async_get_users(self) -> dict[int, str]:
+        """Load all users and return a dict mapping user_id -> name."""
+        data = await self._post(
+            "load_objects.fcgi",
+            {
+                "object": "users",
+                "fields": ["id", "name"],
+            },
+        )
+        return {
+            int(u["id"]): u.get("name", "")
+            for u in data.get("users", [])
+            if "id" in u
+        }
 
-        action = "lock" if locked else "unlock"
-        headers = {"Authorization": f"Bearer {self._token}"}
-        try:
-            response = await self.session.post(
-                f"{self._base_url}/api/doors/{self.door_id}/{action}",
-                headers=headers,
-                ssl=self.verify_ssl,
-            )
-            if response.status in {401, 403}:
-                self._token = None
-                await self.async_authenticate()
-                headers = {"Authorization": f"Bearer {self._token}"}
-                response = await self.session.post(
-                    f"{self._base_url}/api/doors/{self.door_id}/{action}",
-                    headers=headers,
-                    ssl=self.verify_ssl,
-                )
-            response.raise_for_status()
-        except ClientError as err:
-            raise ControlIDApiError(f"Unable to {action} door") from err
+    async def async_configure_monitor(
+        self, hostname: str, port: str, path: str
+    ) -> None:
+        """Configure the device monitor to push events to our server."""
+        await self._post(
+            "set_configuration.fcgi",
+            {
+                "monitor": {
+                    "request_timeout": "5000",
+                    "hostname": hostname,
+                    "port": port,
+                    "path": path,
+                }
+            },
+        )
+        _LOGGER.info(
+            "Configured Control iD monitor -> %s:%s/%s", hostname, port, path
+        )

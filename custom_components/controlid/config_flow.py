@@ -14,10 +14,10 @@ from homeassistant.helpers import aiohttp_client
 from .api import ControlIDApiClient, ControlIDApiError, ControlIDAuthError
 from .const import (
     CONF_DOOR_ID,
+    CONF_HA_URL,
     CONF_HOST,
     CONF_NAME,
     CONF_PORT,
-    CONF_VERIFY_SSL,
     DEFAULT_DOOR_ID,
     DEFAULT_NAME,
     DEFAULT_PORT,
@@ -28,7 +28,7 @@ from .const import (
 class ControlIDConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Control iD."""
 
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -36,17 +36,18 @@ class ControlIDConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            await self.async_set_unique_id(f"{user_input[CONF_HOST]}:{user_input[CONF_PORT]}")
+            await self.async_set_unique_id(
+                f"{user_input[CONF_HOST]}:{user_input[CONF_PORT]}"
+            )
             self._abort_if_unique_id_configured()
 
-            valid = await self._async_validate_input(user_input)
-            if valid:
+            error = await self._async_validate_input(user_input)
+            if error is None:
                 return self.async_create_entry(
                     title=user_input[CONF_NAME],
                     data=user_input,
                 )
-
-            errors["base"] = "cannot_connect"
+            errors["base"] = error
 
         return self.async_show_form(
             step_id="user",
@@ -58,36 +59,44 @@ class ControlIDConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_USERNAME): str,
                     vol.Required(CONF_PASSWORD): str,
                     vol.Required(CONF_DOOR_ID, default=DEFAULT_DOOR_ID): int,
-                    vol.Required(CONF_VERIFY_SSL, default=False): bool,
+                    vol.Optional(CONF_HA_URL): str,
                 }
             ),
             errors=errors,
         )
 
-    async def _async_validate_input(self, user_input: dict[str, Any]) -> bool:
-        """Validate authentication and connectivity."""
+    async def _async_validate_input(
+        self, user_input: dict[str, Any]
+    ) -> str | None:
+        """Validate connectivity. Returns an error key or None on success."""
         session = aiohttp_client.async_get_clientsession(self.hass)
         client = ControlIDApiClient(
             session=session,
             host=user_input[CONF_HOST],
             port=user_input[CONF_PORT],
-            username=user_input[CONF_USERNAME],
+            login=user_input[CONF_USERNAME],
             password=user_input[CONF_PASSWORD],
-            verify_ssl=user_input[CONF_VERIFY_SSL],
             door_id=user_input[CONF_DOOR_ID],
         )
         try:
             await client.async_authenticate()
+        except ControlIDAuthError:
+            return "invalid_auth"
+        except ControlIDApiError:
+            return "cannot_connect"
+
+        try:
             await client.async_get_door_state()
-        except (ControlIDApiError, ControlIDAuthError):
-            return False
-        return True
+        except ControlIDApiError:
+            return "cannot_connect"
+
+        return None
 
     @staticmethod
     @callback
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
-    ) -> "ControlIDOptionsFlowHandler":
+    ) -> ControlIDOptionsFlowHandler:
         return ControlIDOptionsFlowHandler(config_entry)
 
 
@@ -114,6 +123,13 @@ class ControlIDOptionsFlowHandler(config_entries.OptionsFlow):
                             self.config_entry.data[CONF_DOOR_ID],
                         ),
                     ): int,
+                    vol.Optional(
+                        CONF_HA_URL,
+                        default=self.config_entry.options.get(
+                            CONF_HA_URL,
+                            self.config_entry.data.get(CONF_HA_URL, ""),
+                        ),
+                    ): str,
                 }
             ),
         )
