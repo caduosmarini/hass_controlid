@@ -48,21 +48,42 @@ echo "Ultima tag:              $last_tag"
 echo "Versao no manifest.json: $tag_name"
 echo ""
 
+if [[ -n "$(git tag -l "$tag_name")" ]]; then
+    echo "Aviso: Tag '$tag_name' ja existe." >&2
+    read -r -p "Digite a nova versao (ou Enter para cancelar): " new_version
+    if [[ -z "$new_version" ]]; then
+        echo "Cancelado."
+        exit 0
+    fi
+    if [[ -n "$(git tag -l "$new_version")" ]]; then
+        echo "Tag '$new_version' tambem ja existe." >&2
+        exit 1
+    fi
+    tag_name="$new_version"
+    jq --arg v "$tag_name" '.version = $v' "$manifest_path" > "${manifest_path}.tmp" && mv "${manifest_path}.tmp" "$manifest_path"
+    echo "manifest.json atualizado para versao $tag_name"
+    git add "$manifest_path"
+    git commit -m "Bump version to $tag_name"
+    echo ""
+fi
+
 read -r -p "Criar release '$tag_name'? (s/n) " confirm
 if [[ "$confirm" != "s" && "$confirm" != "S" && "$confirm" != "y" && "$confirm" != "Y" ]]; then
     echo "Cancelado."
     exit 0
 fi
 
-if [[ -n "$(git tag -l "$tag_name")" ]]; then
-    echo "Tag '$tag_name' ja existe. Atualize a versao no manifest.json antes de criar uma nova release." >&2
-    exit 1
-fi
-
 status=$(git status --porcelain)
 if [[ -n "$status" ]]; then
-    echo "Working tree com alteracoes nao commitadas. Faca commit ou stash antes de criar a release." >&2
-    exit 1
+    echo "Aviso: Working tree com alteracoes nao commitadas:" >&2
+    git status --short
+    read -r -p "Fazer commit de tudo antes de continuar? (s/n) " commit_confirm
+    if [[ "$commit_confirm" != "s" && "$commit_confirm" != "S" && "$commit_confirm" != "y" && "$commit_confirm" != "Y" ]]; then
+        echo "Cancelado."
+        exit 0
+    fi
+    git add -A
+    git commit -m "Release $tag_name"
 fi
 
 git push origin HEAD
@@ -70,4 +91,5 @@ git tag -a "$tag_name" -m "Release $tag_name"
 git push origin "$tag_name"
 gh release create "$tag_name" --title "$tag_name" --generate-notes
 
+echo ""
 echo "Release criada: $tag_name"
