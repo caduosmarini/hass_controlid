@@ -128,12 +128,6 @@ class ControlIDDaoView(HomeAssistantView):
                 _LOGGER.debug("Monitor access_log event: %s", values)
                 self._coordinator.handle_access_log_event(values)
 
-                user_id = int(values.get("user_id", 0))
-                if user_id > 0:
-                    self._coordinator.hass.async_create_task(
-                        self._coordinator.async_update_photo_for_user(user_id)
-                    )
-
         return web.Response(status=200)
 
 

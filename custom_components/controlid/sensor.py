@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -15,8 +16,13 @@ from . import ControlIDConfigEntry
 from .const import (
     ACCESS_EVENT_LABELS,
     ACCESS_EVENTS_RELEVANT,
+    CONF_DOOR_ID,
+    CONF_HA_URL,
     CONF_HOST,
     CONF_NAME,
+    CONF_PORT,
+    CONF_SCAN_INTERVAL,
+    DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     EVENT_ACCESS_GRANTED,
 )
@@ -28,9 +34,15 @@ async def async_setup_entry(
     entry: ControlIDConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Control iD access sensor."""
+    """Set up Control iD sensors."""
     coordinator: ControlIDDataUpdateCoordinator = entry.runtime_data
-    async_add_entities([ControlIDAccessSensor(coordinator, entry)])
+    async_add_entities([
+        ControlIDAccessSensor(coordinator, entry),
+        ControlIDIPSensor(coordinator, entry),
+        ControlIDDeviceTypeSensor(coordinator, entry),
+        ControlIDPollingSensor(coordinator, entry),
+        ControlIDUsersSensor(coordinator, entry),
+    ])
 
 
 class ControlIDAccessSensor(
@@ -91,6 +103,15 @@ class ControlIDAccessSensor(
             return f"{label} - {name}"
         return label
 
+    @staticmethod
+    def _format_ts(raw: Any) -> str | None:
+        if raw is None:
+            return None
+        try:
+            return datetime.fromtimestamp(int(raw), tz=UTC).isoformat()
+        except (ValueError, OSError):
+            return str(raw)
+
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         attrs: dict[str, Any] = {}
@@ -99,40 +120,148 @@ class ControlIDAccessSensor(
             return attrs
 
         event_id = int(entry.get("event", 0))
-        attrs["event"] = self._event_label(entry)
-        attrs["event_id"] = event_id
+        attrs["evento"] = self._event_label(entry)
+        attrs["evento_id"] = event_id
+        attrs["data_hora"] = self._format_ts(entry.get("time"))
 
         user_id = int(entry.get("user_id", 0))
-        attrs["user_id"] = user_id
-        attrs["user_name"] = self._user_name(entry)
-
-        ts = entry.get("time")
-        if ts:
-            try:
-                attrs["time"] = datetime.fromtimestamp(int(ts), tz=UTC).isoformat()
-            except (ValueError, OSError):
-                attrs["time"] = ts
+        attrs["usuario_id"] = user_id
+        attrs["usuario_nome"] = self._user_name(entry)
 
         attrs["portal_id"] = entry.get("portal_id")
+        attrs["device_id"] = entry.get("device_id")
         attrs["identifier_id"] = entry.get("identifier_id")
         attrs["card_value"] = entry.get("card_value")
+        attrs["qrcode_value"] = entry.get("qrcode_value")
+        attrs["pin_value"] = entry.get("pin_value")
+        attrs["uhf_tag"] = entry.get("uhf_tag")
+
+        confidence = entry.get("confidence")
+        if confidence is not None:
+            attrs["confianca_facial"] = confidence
+
+        mask = entry.get("mask")
+        if mask is not None:
+            attrs["mascara"] = bool(int(mask))
+
+        attrs["log_id"] = entry.get("id")
 
         recent: list[dict[str, Any]] = []
         for log in self.coordinator.data.access_logs:
             uid = int(log.get("user_id", 0))
-            log_ts = log.get("time")
-            ts_str = None
-            if log_ts:
-                try:
-                    ts_str = datetime.fromtimestamp(
-                        int(log_ts), tz=UTC
-                    ).isoformat()
-                except (ValueError, OSError):
-                    ts_str = str(log_ts)
             recent.append({
-                "event": self._event_label(log),
-                "user": self.coordinator.data.users.get(uid, str(uid)) if uid else "",
-                "time": ts_str,
+                "evento": self._event_label(log),
+                "usuario": self.coordinator.data.users.get(uid, str(uid)) if uid else "",
+                "data_hora": self._format_ts(log.get("time")),
             })
-        attrs["recent_access"] = recent
+        attrs["acessos_recentes"] = recent
         return attrs
+
+
+class _DiagnosticBase(
+    CoordinatorEntity[ControlIDDataUpdateCoordinator], SensorEntity
+):
+    """Base for diagnostic sensors."""
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        coordinator: ControlIDDataUpdateCoordinator,
+        entry: ControlIDConfigEntry,
+        suffix: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_{suffix}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=entry.data.get(CONF_NAME, "Control iD"),
+            manufacturer="Control iD",
+            configuration_url=f"http://{entry.data.get(CONF_HOST, '')}",
+        )
+
+
+class ControlIDIPSensor(_DiagnosticBase):
+    """IP address and port of the device."""
+
+    _attr_icon = "mdi:ip-network"
+    _attr_name = "IP"
+
+    def __init__(self, coordinator: ControlIDDataUpdateCoordinator, entry: ControlIDConfigEntry) -> None:
+        super().__init__(coordinator, entry, "ip")
+
+    @property
+    def native_value(self) -> str:
+        host = self._entry.data.get(CONF_HOST, "")
+        port = self._entry.data.get(CONF_PORT, 80)
+        return f"{host}:{port}"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        ha_url = (
+            self._entry.data.get(CONF_HA_URL, "")
+            or self._entry.options.get(CONF_HA_URL, "")
+        )
+        return {
+            "host": self._entry.data.get(CONF_HOST, ""),
+            "port": self._entry.data.get(CONF_PORT, 80),
+            "monitor_url": ha_url or "não configurado",
+        }
+
+
+class ControlIDDeviceTypeSensor(_DiagnosticBase):
+    """Detected device type (door relay vs SecBox)."""
+
+    _attr_icon = "mdi:chip"
+    _attr_name = "Tipo"
+
+    def __init__(self, coordinator: ControlIDDataUpdateCoordinator, entry: ControlIDConfigEntry) -> None:
+        super().__init__(coordinator, entry, "device_type")
+
+    @property
+    def native_value(self) -> str:
+        api = self.coordinator.api
+        dtype = api._device_type or "unknown"
+        return "SecBox" if dtype == "sec_box" else "Relé direto" if dtype == "door" else dtype
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        api = self.coordinator.api
+        return {
+            "device_type_raw": api._device_type or "unknown",
+            "actual_id": api._actual_id,
+            "door_id_config": self._entry.data.get(CONF_DOOR_ID),
+        }
+
+
+class ControlIDPollingSensor(_DiagnosticBase):
+    """Current polling interval."""
+
+    _attr_icon = "mdi:timer-sync-outline"
+    _attr_name = "Polling"
+    _attr_native_unit_of_measurement = "s"
+
+    def __init__(self, coordinator: ControlIDDataUpdateCoordinator, entry: ControlIDConfigEntry) -> None:
+        super().__init__(coordinator, entry, "polling")
+
+    @property
+    def native_value(self) -> int:
+        return self._entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+
+
+class ControlIDUsersSensor(_DiagnosticBase):
+    """Number of users loaded from the device."""
+
+    _attr_icon = "mdi:account-group"
+    _attr_name = "Usuários"
+
+    def __init__(self, coordinator: ControlIDDataUpdateCoordinator, entry: ControlIDConfigEntry) -> None:
+        super().__init__(coordinator, entry, "users_count")
+
+    @property
+    def native_value(self) -> int:
+        if self.coordinator.data is None:
+            return 0
+        return len(self.coordinator.data.users)

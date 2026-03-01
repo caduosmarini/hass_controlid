@@ -199,22 +199,3 @@ class ControlIDDataUpdateCoordinator(DataUpdateCoordinator[ControlIDData]):
             self.data.last_photo_user_id = self._last_photo_user_id
             self.async_set_updated_data(self.data)
 
-    async def async_update_photo_for_user(self, user_id: int) -> None:
-        """Fetch user photo from the device API and update coordinator data."""
-        if user_id <= 0:
-            return
-        try:
-            photo = await self.api.async_get_user_image(user_id)
-        except ControlIDApiError:
-            _LOGGER.debug("Could not fetch photo for user_id=%s", user_id)
-            return
-        if not photo:
-            return
-        self._last_photo = photo
-        self._last_photo_updated = datetime.now(tz=UTC)
-        self._last_photo_user_id = user_id
-        if self.data is not None:
-            self.data.last_photo = self._last_photo
-            self.data.last_photo_updated = self._last_photo_updated
-            self.data.last_photo_user_id = self._last_photo_user_id
-            self.async_set_updated_data(self.data)

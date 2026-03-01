@@ -262,6 +262,68 @@ class ControlIDApiClient:
         )
         return None
 
+    async def async_get_configuration(
+        self, module: str, keys: list[str]
+    ) -> dict[str, Any]:
+        """Generic read of device configuration."""
+        data = await self._post("get_configuration.fcgi", {module: keys})
+        return data.get(module, {})
+
+    async def async_set_configuration(
+        self, module: str, values: dict[str, Any]
+    ) -> None:
+        """Generic write of device configuration."""
+        await self._post("set_configuration.fcgi", {module: values})
+
+    async def async_load_object(
+        self, object_type: str, fields: list[str] | None = None, **kwargs: Any
+    ) -> list[dict[str, Any]]:
+        """Generic load_objects.fcgi wrapper."""
+        payload: dict[str, Any] = {"object": object_type}
+        if fields:
+            payload["fields"] = fields
+        payload.update(kwargs)
+        data = await self._post("load_objects.fcgi", payload)
+        return data.get(object_type, [])
+
+    async def async_modify_object(
+        self, object_type: str, values: dict[str, Any], where: dict[str, Any]
+    ) -> int:
+        """Generic modify_objects.fcgi wrapper. Returns number of changes."""
+        data = await self._post(
+            "modify_objects.fcgi",
+            {"object": object_type, "values": values, "where": where},
+        )
+        return data.get("changes", 0)
+
+    async def async_get_secbox(self) -> dict[str, Any] | None:
+        """Load the first sec_box object from the device."""
+        rows = await self.async_load_object(
+            "sec_boxs",
+            fields=["id", "relay_timeout", "door_sensor_enabled",
+                     "door_sensor_idle", "auto_close_enabled", "enabled"],
+        )
+        return rows[0] if rows else None
+
+    async def async_set_secbox_relay_timeout(
+        self, secbox_id: int, timeout_ms: int
+    ) -> None:
+        """Update the relay_timeout on a specific sec_box."""
+        await self.async_modify_object(
+            "sec_boxs",
+            {"relay_timeout": timeout_ms},
+            {"sec_boxs": {"id": secbox_id}},
+        )
+
+    async def async_message_to_screen(
+        self, message: str, timeout: int = 5000
+    ) -> None:
+        """Send a message to be displayed on the device screen."""
+        await self._post(
+            "message_to_screen.fcgi",
+            {"message": message, "timeout": timeout},
+        )
+
     async def async_get_monitor_config(self) -> dict[str, Any]:
         """Read back the current monitor configuration from the device."""
         data = await self._post(

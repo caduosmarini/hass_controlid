@@ -16,7 +16,7 @@ DEFAULT_PORT = 80
 DEFAULT_DOOR_ID = 1
 DEFAULT_SCAN_INTERVAL = 5
 
-PLATFORMS = ["lock", "binary_sensor", "sensor", "image"]
+PLATFORMS = ["lock", "binary_sensor", "sensor", "image", "text", "select", "switch", "number"]
 ACCESS_LOG_LIMIT = 10
 
 ACCESS_EVENT_LABELS: dict[int, str] = {
