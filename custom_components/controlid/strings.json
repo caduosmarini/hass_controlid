@@ -1,0 +1,32 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Control iD",
+        "description": "Configure your Control iD access controller.",
+        "data": {
+          "name": "Name",
+          "host": "Host",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password",
+          "door_id": "Door ID",
+          "verify_ssl": "Verify SSL certificate"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect or authenticate"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Control iD options",
+        "data": {
+          "door_id": "Door ID"
+        }
+      }
+    }
+  }
+}

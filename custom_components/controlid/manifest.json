@@ -1,0 +1,12 @@
+{
+  "domain": "controlid",
+  "name": "Control iD Access",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://www.controlid.com.br/docs/access-api-pt/",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "loggers": ["custom_components.controlid"],
+  "requirements": [],
+  "version": "0.1.0"
+}
