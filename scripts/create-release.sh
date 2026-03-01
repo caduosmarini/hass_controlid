@@ -43,8 +43,16 @@ fi
 last_tag=$(git tag --sort=-creatordate 2>/dev/null | head -n1)
 [[ -z "$last_tag" ]] && last_tag="<nenhuma>"
 
-echo "Ultima tag: $last_tag"
+echo ""
+echo "Ultima tag:              $last_tag"
 echo "Versao no manifest.json: $tag_name"
+echo ""
+
+read -r -p "Criar release '$tag_name'? (s/n) " confirm
+if [[ "$confirm" != "s" && "$confirm" != "S" && "$confirm" != "y" && "$confirm" != "Y" ]]; then
+    echo "Cancelado."
+    exit 0
+fi
 
 if [[ -n "$(git tag -l "$tag_name")" ]]; then
     echo "Tag '$tag_name' ja existe. Atualize a versao no manifest.json antes de criar uma nova release." >&2

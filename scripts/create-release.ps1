@@ -56,8 +56,16 @@ if ([string]::IsNullOrWhiteSpace($lastTag)) {
     $lastTag = "<nenhuma>"
 }
 
-Write-Host "Ultima tag: $lastTag"
+Write-Host ""
+Write-Host "Ultima tag:              $lastTag"
 Write-Host "Versao no manifest.json: $tagName"
+Write-Host ""
+
+$confirm = Read-Host "Criar release '$tagName'? (s/n)"
+if ($confirm -notin @("s", "S", "y", "Y")) {
+    Write-Host "Cancelado."
+    exit 0
+}
 
 $existingTag = git tag --list $tagName
 if (-not [string]::IsNullOrWhiteSpace($existingTag)) {
