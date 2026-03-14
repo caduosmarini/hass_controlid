@@ -28,7 +28,8 @@
         "data": {
           "door_id": "ID da porta",
           "scan_interval": "Intervalo de polling (segundos)",
-          "ha_url": "URL do Home Assistant (para monitor em tempo real)"
+          "ha_url": "URL do Home Assistant (para monitor em tempo real)",
+          "rtsp_url": "Template da URL RTSP (opcional)"
         }
       }
     }

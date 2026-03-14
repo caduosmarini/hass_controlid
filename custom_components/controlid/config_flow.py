@@ -19,6 +19,7 @@ from .const import (
     CONF_HOST,
     CONF_NAME,
     CONF_PORT,
+    CONF_RTSP_URL,
     CONF_SCAN_INTERVAL,
     DEFAULT_DOOR_ID,
     DEFAULT_NAME,
@@ -147,6 +148,10 @@ class ControlIDOptionsFlowHandler(config_entries.OptionsFlow):
             CONF_HA_URL,
             self._config_entry.data.get(CONF_HA_URL, ""),
         )
+        current_rtsp_url = self._config_entry.options.get(
+            CONF_RTSP_URL,
+            self._config_entry.data.get(CONF_RTSP_URL, ""),
+        )
 
         return self.async_show_form(
             step_id="init",
@@ -158,6 +163,7 @@ class ControlIDOptionsFlowHandler(config_entries.OptionsFlow):
                         default=current_scan_interval,
                     ): vol.All(int, vol.Range(min=1, max=300)),
                     vol.Optional(CONF_HA_URL, default=current_ha_url): str,
+                    vol.Optional(CONF_RTSP_URL, default=current_rtsp_url): str,
                 }
             ),
         )

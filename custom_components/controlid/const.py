@@ -10,13 +10,27 @@ CONF_DOOR_ID = "door_id"
 CONF_NAME = "name"
 CONF_HA_URL = "ha_url"
 CONF_SCAN_INTERVAL = "scan_interval"
+CONF_RTSP_URL = "rtsp_url"
 
 DEFAULT_NAME = "Control iD"
 DEFAULT_PORT = 80
 DEFAULT_DOOR_ID = 1
 DEFAULT_SCAN_INTERVAL = 5
+DEFAULT_RTSP_URL_TEMPLATE = (
+    "rtsp://{username}:{password}@{host}:554/cam/realmonitor?channel=1&subtype=0"
+)
 
-PLATFORMS = ["lock", "binary_sensor", "sensor", "image", "text", "select", "switch", "number"]
+PLATFORMS = [
+    "lock",
+    "binary_sensor",
+    "sensor",
+    "image",
+    "camera",
+    "text",
+    "select",
+    "switch",
+    "number",
+]
 ACCESS_LOG_LIMIT = 10
 
 ACCESS_EVENT_LABELS: dict[int, str] = {

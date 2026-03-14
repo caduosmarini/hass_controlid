@@ -28,7 +28,8 @@
         "data": {
           "door_id": "Door ID",
           "scan_interval": "Polling interval (seconds)",
-          "ha_url": "Home Assistant URL (for real-time monitor)"
+          "ha_url": "Home Assistant URL (for real-time monitor)",
+          "rtsp_url": "RTSP URL template (optional)"
         }
       }
     }
