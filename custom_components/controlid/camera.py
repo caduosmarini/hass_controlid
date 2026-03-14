@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from urllib.parse import quote
 
-from homeassistant.components.camera import Camera
+from homeassistant.components.camera import Camera, CameraEntityFeature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -40,6 +40,8 @@ class ControlIDRTSPCamera(Camera):
 
     _attr_has_entity_name = True
     _attr_name = "Câmera RTSP"
+    _attr_supported_features = CameraEntityFeature.STREAM
+    _attr_use_stream_for_stills = True
 
     def __init__(
         self, entry: ControlIDConfigEntry, coordinator: ControlIDDataUpdateCoordinator
