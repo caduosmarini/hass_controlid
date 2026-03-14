@@ -7,7 +7,7 @@ Integração customizada para equipamentos de acesso Control iD (iDAccess, iDFac
 - **Lock** (`lock`): Destravar abre a porta remotamente via relé. A porta trava automaticamente ao fechar (sensor de porta).
 - **Sensor de porta** (`binary_sensor`): Mostra se a porta está aberta ou fechada em tempo real.
 - **Último acesso** (`sensor`): Exibe o último evento de acesso (nome do usuário, tipo de evento) e os últimos 10 acessos nos atributos.
-- **Câmera RTSP** (`camera`): Exibe stream em tempo real do dispositivo via RTSP.
+- **Câmera RTSP** (`camera`, iDFace): Exibe stream em tempo real via RTSP (somente quando o dispositivo suporta módulo `onvif`).
 - **Monitor em tempo real** (opcional): Recebe notificações push do dispositivo via HTTP (abertura/fechamento de porta e novos acessos).
 - Config Flow (UI) para cadastro do equipamento.
 - Traduções `pt-BR` e `en`.

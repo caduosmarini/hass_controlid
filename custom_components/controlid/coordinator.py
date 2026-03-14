@@ -73,6 +73,9 @@ class ControlIDDataUpdateCoordinator(DataUpdateCoordinator[ControlIDData]):
 
         self._last_alive: datetime | None = None
         self._monitor_reconfigure_pending = False
+        self._supports_idface_media = False
+        self._onvif_config: dict[str, str] = {}
+        self._media_capabilities_checked = False
 
         scan_interval = config_entry.options.get(
             CONF_SCAN_INTERVAL,
@@ -84,6 +87,43 @@ class ControlIDDataUpdateCoordinator(DataUpdateCoordinator[ControlIDData]):
             name=DOMAIN,
             update_interval=timedelta(seconds=scan_interval),
         )
+
+    @property
+    def supports_idface_media(self) -> bool:
+        """Whether this device supports iDFace media features."""
+        return self._supports_idface_media
+
+    @property
+    def onvif_config(self) -> dict[str, str]:
+        """Last onvif config read from the device."""
+        return self._onvif_config
+
+    async def async_detect_media_capabilities(self) -> None:
+        """Detect whether this entry supports iDFace camera/photo features."""
+        if self._media_capabilities_checked:
+            return
+        self._media_capabilities_checked = True
+        try:
+            cfg = await self.api.async_get_configuration(
+                "onvif",
+                ["rtsp_enabled", "rtsp_port", "rtsp_username", "rtsp_password"],
+            )
+        except ControlIDApiError:
+            _LOGGER.debug("onvif module not available for this device")
+            self._supports_idface_media = False
+            self._onvif_config = {}
+            return
+
+        if not isinstance(cfg, dict):
+            self._supports_idface_media = False
+            self._onvif_config = {}
+            return
+
+        keys = ("rtsp_enabled", "rtsp_port", "rtsp_username", "rtsp_password")
+        self._supports_idface_media = any(k in cfg for k in keys)
+        self._onvif_config = {k: str(v) for k, v in cfg.items() if v is not None}
+        if self._supports_idface_media:
+            _LOGGER.info("Detected iDFace media support (onvif/rtsp)")
 
     @property
     def monitor_configured(self) -> bool:

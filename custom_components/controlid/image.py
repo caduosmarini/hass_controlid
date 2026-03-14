@@ -20,6 +20,8 @@ async def async_setup_entry(
 ) -> None:
     """Set up Control iD access photo image entity."""
     coordinator: ControlIDDataUpdateCoordinator = entry.runtime_data
+    if not coordinator.supports_idface_media:
+        return
     async_add_entities([ControlIDAccessPhoto(coordinator, entry)])
 
 

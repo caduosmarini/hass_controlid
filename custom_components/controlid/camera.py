@@ -20,6 +20,7 @@ from .const import (
     DEFAULT_RTSP_URL_TEMPLATE,
     DOMAIN,
 )
+from .coordinator import ControlIDDataUpdateCoordinator
 
 
 async def async_setup_entry(
@@ -28,7 +29,10 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Control iD camera entity."""
-    async_add_entities([ControlIDRTSPCamera(entry)])
+    coordinator: ControlIDDataUpdateCoordinator = entry.runtime_data
+    if not coordinator.supports_idface_media:
+        return
+    async_add_entities([ControlIDRTSPCamera(entry, coordinator)])
 
 
 class ControlIDRTSPCamera(Camera):
@@ -37,9 +41,12 @@ class ControlIDRTSPCamera(Camera):
     _attr_has_entity_name = True
     _attr_name = "Câmera RTSP"
 
-    def __init__(self, entry: ControlIDConfigEntry) -> None:
+    def __init__(
+        self, entry: ControlIDConfigEntry, coordinator: ControlIDDataUpdateCoordinator
+    ) -> None:
         super().__init__()
         self._entry = entry
+        self._coordinator = coordinator
         self._attr_unique_id = f"{entry.entry_id}_rtsp_camera"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
@@ -51,27 +58,40 @@ class ControlIDRTSPCamera(Camera):
     @property
     def stream_source(self) -> str | None:
         """Return RTSP stream URL for HA stream worker."""
-        template = (
-            self._entry.options.get(CONF_RTSP_URL)
-            or self._entry.data.get(CONF_RTSP_URL)
-            or DEFAULT_RTSP_URL_TEMPLATE
-        ).strip()
-        if not template:
+        host = str(self._entry.data.get(CONF_HOST, ""))
+        configured_template = (
+            self._entry.options.get(CONF_RTSP_URL) or self._entry.data.get(CONF_RTSP_URL)
+        )
+        if configured_template:
+            template = configured_template.strip()
+            if not template:
+                return None
+            username = quote(str(self._entry.data.get(CONF_USERNAME, "")), safe="")
+            password = quote(str(self._entry.data.get(CONF_PASSWORD, "")), safe="")
+            values = defaultdict(
+                str,
+                {
+                    "host": host,
+                    "username": username,
+                    "password": password,
+                },
+            )
+            return template.format_map(values)
+
+        onvif_cfg = self._coordinator.onvif_config
+        enabled = onvif_cfg.get("rtsp_enabled", "")
+        if enabled not in {"1", "true", "True"}:
             return None
 
-        host = str(self._entry.data.get(CONF_HOST, ""))
-        username = quote(str(self._entry.data.get(CONF_USERNAME, "")), safe="")
-        password = quote(str(self._entry.data.get(CONF_PASSWORD, "")), safe="")
+        port = onvif_cfg.get("rtsp_port", "554")
+        rtsp_user = onvif_cfg.get("rtsp_username", "")
+        rtsp_pass = onvif_cfg.get("rtsp_password", "")
+        if rtsp_user or rtsp_pass:
+            user = quote(rtsp_user, safe="")
+            password = quote(rtsp_pass, safe="")
+            return f"rtsp://{user}:{password}@{host}:{port}/main_stream"
 
-        values = defaultdict(
-            str,
-            {
-                "host": host,
-                "username": username,
-                "password": password,
-            },
-        )
-        return template.format_map(values)
+        return f"rtsp://{host}:{port}/main_stream"
 
     @property
     def available(self) -> bool:
@@ -84,4 +104,7 @@ class ControlIDRTSPCamera(Camera):
             or self._entry.data.get(CONF_RTSP_URL)
             or DEFAULT_RTSP_URL_TEMPLATE
         )
-        return {"rtsp_template": configured_template}
+        attrs = {"rtsp_template": configured_template}
+        attrs["rtsp_enabled"] = self._coordinator.onvif_config.get("rtsp_enabled", "")
+        attrs["rtsp_port"] = self._coordinator.onvif_config.get("rtsp_port", "")
+        return attrs
