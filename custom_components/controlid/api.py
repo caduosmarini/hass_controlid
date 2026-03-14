@@ -345,23 +345,26 @@ class ControlIDApiClient:
         self, hostname: str, port: str, path: str
     ) -> None:
         """Configure the device monitor to push events to our server."""
+        hostname_s = str(hostname)
+        port_s = str(port)
+        path_s = str(path)
         await self._post(
             "set_configuration.fcgi",
             {
                 "monitor": {
                     "request_timeout": "5000",
-                    "hostname": hostname,
-                    "port": port,
-                    "path": path,
-                    "enable_photo_upload": True,
+                    "hostname": hostname_s,
+                    "port": port_s,
+                    "path": path_s,
+                    "enable_photo_upload": "1",
                 }
             },
         )
         _LOGGER.info(
             "Configured Control iD monitor -> %s:%s/%s (photo_upload=on)",
-            hostname,
-            port,
-            path,
+            hostname_s,
+            port_s,
+            path_s,
         )
 
     async def async_verify_monitor(

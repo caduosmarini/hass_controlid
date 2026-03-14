@@ -77,24 +77,31 @@ class ControlIDAccessSensor(
         if not logs:
             return None
         for log in logs:
-            if int(log.get("event", 0)) in ACCESS_EVENTS_RELEVANT:
+            if self._to_int(log.get("event", 0)) in ACCESS_EVENTS_RELEVANT:
                 return log
         return logs[0]
 
     def _event_label(self, log: dict[str, Any]) -> str:
-        event_id = int(log.get("event", 0))
+        event_id = self._to_int(log.get("event", 0))
         return ACCESS_EVENT_LABELS.get(event_id, f"Evento {event_id}")
 
     def _user_name(self, log: dict[str, Any]) -> str:
-        uid = int(log.get("user_id", 0))
+        uid = self._to_int(log.get("user_id", 0))
         return self.coordinator.data.users.get(uid, "") if uid else ""
+
+    @staticmethod
+    def _to_int(value: Any, default: int = 0) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
 
     @property
     def native_value(self) -> str | None:
         entry = self._last
         if entry is None:
             return None
-        event_id = int(entry.get("event", 0))
+        event_id = self._to_int(entry.get("event", 0))
         name = self._user_name(entry)
         if event_id == EVENT_ACCESS_GRANTED and name:
             return name
@@ -119,12 +126,12 @@ class ControlIDAccessSensor(
         if entry is None:
             return attrs
 
-        event_id = int(entry.get("event", 0))
+        event_id = self._to_int(entry.get("event", 0))
         attrs["evento"] = self._event_label(entry)
         attrs["evento_id"] = event_id
         attrs["data_hora"] = self._format_ts(entry.get("time"))
 
-        user_id = int(entry.get("user_id", 0))
+        user_id = self._to_int(entry.get("user_id", 0))
         attrs["usuario_id"] = user_id
         attrs["usuario_nome"] = self._user_name(entry)
 
@@ -142,13 +149,13 @@ class ControlIDAccessSensor(
 
         mask = entry.get("mask")
         if mask is not None:
-            attrs["mascara"] = bool(int(mask))
+            attrs["mascara"] = bool(self._to_int(mask))
 
         attrs["log_id"] = entry.get("id")
 
         recent: list[dict[str, Any]] = []
         for log in self.coordinator.data.access_logs:
-            uid = int(log.get("user_id", 0))
+            uid = self._to_int(log.get("user_id", 0))
             recent.append({
                 "evento": self._event_label(log),
                 "usuario": self.coordinator.data.users.get(uid, str(uid)) if uid else "",
@@ -229,10 +236,13 @@ class ControlIDDeviceTypeSensor(_DiagnosticBase):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         api = self.coordinator.api
+        configured_door = self._entry.options.get(
+            CONF_DOOR_ID, self._entry.data.get(CONF_DOOR_ID)
+        )
         return {
             "device_type_raw": api._device_type or "unknown",
             "actual_id": api._actual_id,
-            "door_id_config": self._entry.data.get(CONF_DOOR_ID),
+            "door_id_config": configured_door,
         }
 
 
@@ -248,7 +258,10 @@ class ControlIDPollingSensor(_DiagnosticBase):
 
     @property
     def native_value(self) -> int:
-        return self._entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        return self._entry.options.get(
+            CONF_SCAN_INTERVAL,
+            self._entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+        )
 
 
 class ControlIDUsersSensor(_DiagnosticBase):
