@@ -52,7 +52,7 @@ Campos solicitados:
 | Senha | Senha da API (padrão: admin) |
 | ID da porta | Número da porta/relé (padrão: 1) |
 | URL do HA | Opcional. Ex: `http://192.168.1.100:8123`. Se preenchido, configura o Monitor do dispositivo para enviar notificações em tempo real ao HA. |
-| Template da URL RTSP | Opcional. Ex: `rtsp://{username}:{password}@{host}:554/cam/realmonitor?channel=1&subtype=0` |
+| Template da URL RTSP | Opcional. Ex: `rtsp://{username}:{password}@{host}:554/main_stream` |
 
 ## API utilizada
 

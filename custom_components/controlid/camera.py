@@ -55,9 +55,8 @@ class ControlIDRTSPCamera(Camera):
             configuration_url=f"http://{entry.data.get(CONF_HOST, '')}",
         )
 
-    @property
-    def stream_source(self) -> str | None:
-        """Return RTSP stream URL for HA stream worker."""
+    def _build_stream_source(self) -> str | None:
+        """Build RTSP stream URL for HA stream worker."""
         host = str(self._entry.data.get(CONF_HOST, ""))
         configured_template = (
             self._entry.options.get(CONF_RTSP_URL) or self._entry.data.get(CONF_RTSP_URL)
@@ -93,9 +92,13 @@ class ControlIDRTSPCamera(Camera):
 
         return f"rtsp://{host}:{port}/main_stream"
 
+    async def stream_source(self) -> str | None:
+        """Return RTSP stream URL for HA."""
+        return self._build_stream_source()
+
     @property
     def available(self) -> bool:
-        return bool(self.stream_source)
+        return bool(self._build_stream_source())
 
     @property
     def extra_state_attributes(self) -> dict[str, str]:

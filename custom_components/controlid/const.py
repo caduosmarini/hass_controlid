@@ -17,7 +17,7 @@ DEFAULT_PORT = 80
 DEFAULT_DOOR_ID = 1
 DEFAULT_SCAN_INTERVAL = 5
 DEFAULT_RTSP_URL_TEMPLATE = (
-    "rtsp://{username}:{password}@{host}:554/cam/realmonitor?channel=1&subtype=0"
+    "rtsp://{username}:{password}@{host}:554/main_stream"
 )
 
 PLATFORMS = [

@@ -27,6 +27,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_DOOR_ID,
     DOMAIN,
+    EVENT_ACCESS_GRANTED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -233,11 +234,18 @@ class ControlIDDataUpdateCoordinator(DataUpdateCoordinator[ControlIDData]):
         self.data.access_logs = self.data.access_logs[:ACCESS_LOG_LIMIT]
         self.async_set_updated_data(self.data)
 
+        # Some firmware/builds don't send access_photo reliably. In that case,
+        # fetch the user's stored photo after an access-granted event.
+        event_id = self._to_int(log_entry.get("event"))
+        user_id = self._to_int(log_entry.get("user_id"))
+        if event_id == EVENT_ACCESS_GRANTED and user_id > 0:
+            self.hass.async_create_task(self._async_refresh_user_photo(user_id))
+
     def handle_access_photo(self, photo_b64: str, user_id: int) -> None:
         """Process a real-time access photo from the monitor."""
         self._last_alive = datetime.now(tz=UTC)
         try:
-            self._last_photo = base64.b64decode(photo_b64)
+            self._last_photo = self._decode_photo(photo_b64)
         except Exception:
             _LOGGER.warning("Failed to decode access photo")
             return
@@ -247,5 +255,39 @@ class ControlIDDataUpdateCoordinator(DataUpdateCoordinator[ControlIDData]):
             self.data.last_photo = self._last_photo
             self.data.last_photo_updated = self._last_photo_updated
             self.data.last_photo_user_id = self._last_photo_user_id
+            self.async_set_updated_data(self.data)
+
+    @staticmethod
+    def _to_int(value: Any, default: int = 0) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _decode_photo(photo_b64: str) -> bytes:
+        """Decode raw base64 or data URL payload."""
+        payload = (photo_b64 or "").strip()
+        if "," in payload and payload.lower().startswith("data:"):
+            payload = payload.split(",", 1)[1].strip()
+        return base64.b64decode(payload)
+
+    async def _async_refresh_user_photo(self, user_id: int) -> None:
+        """Fetch user registered image as a fallback when no push photo arrives."""
+        try:
+            img = await self.api.async_get_user_image(user_id)
+        except ControlIDApiError:
+            _LOGGER.debug("Failed to fetch user image for user_id=%s", user_id)
+            return
+        if not img:
+            return
+
+        self._last_photo = img
+        self._last_photo_updated = datetime.now(tz=UTC)
+        self._last_photo_user_id = user_id
+        if self.data is not None:
+            self.data.last_photo = img
+            self.data.last_photo_updated = self._last_photo_updated
+            self.data.last_photo_user_id = user_id
             self.async_set_updated_data(self.data)
 
