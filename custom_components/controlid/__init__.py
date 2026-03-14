@@ -30,6 +30,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ControlIDConfigEntry) ->
     coordinator = ControlIDDataUpdateCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
     await coordinator.async_detect_media_capabilities()
+    await coordinator.async_ensure_rtsp_enabled()
 
     entry.runtime_data = coordinator
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))

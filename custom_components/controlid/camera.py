@@ -78,10 +78,6 @@ class ControlIDRTSPCamera(Camera):
             return template.format_map(values)
 
         onvif_cfg = self._coordinator.onvif_config
-        enabled = onvif_cfg.get("rtsp_enabled", "")
-        if enabled not in {"1", "true", "True"}:
-            return None
-
         port = onvif_cfg.get("rtsp_port", "554")
         rtsp_user = onvif_cfg.get("rtsp_username", "")
         rtsp_pass = onvif_cfg.get("rtsp_password", "")
@@ -98,7 +94,8 @@ class ControlIDRTSPCamera(Camera):
 
     @property
     def available(self) -> bool:
-        return bool(self._build_stream_source())
+        host = str(self._entry.data.get(CONF_HOST, "")).strip()
+        return bool(host and self._build_stream_source())
 
     @property
     def extra_state_attributes(self) -> dict[str, str]:
@@ -110,4 +107,5 @@ class ControlIDRTSPCamera(Camera):
         attrs = {"rtsp_template": configured_template}
         attrs["rtsp_enabled"] = self._coordinator.onvif_config.get("rtsp_enabled", "")
         attrs["rtsp_port"] = self._coordinator.onvif_config.get("rtsp_port", "")
+        attrs["resolved_stream_source"] = self._build_stream_source() or ""
         return attrs

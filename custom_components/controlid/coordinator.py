@@ -16,6 +16,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api import ControlIDApiClient, ControlIDApiError
 from .const import (
+    ACCESS_EVENTS_RELEVANT,
     ACCESS_LOG_LIMIT,
     CONF_DOOR_ID,
     CONF_HA_URL,
@@ -27,7 +28,6 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_DOOR_ID,
     DOMAIN,
-    EVENT_ACCESS_GRANTED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -125,6 +125,27 @@ class ControlIDDataUpdateCoordinator(DataUpdateCoordinator[ControlIDData]):
         self._onvif_config = {k: str(v) for k, v in cfg.items() if v is not None}
         if self._supports_idface_media:
             _LOGGER.info("Detected iDFace media support (onvif/rtsp)")
+
+    async def async_ensure_rtsp_enabled(self) -> None:
+        """Enable RTSP on iDFace when possible."""
+        if not self._supports_idface_media:
+            return
+        enabled = self._onvif_config.get("rtsp_enabled", "")
+        if enabled in {"1", "true", "True"}:
+            return
+        try:
+            await self.api.async_set_configuration("onvif", {"rtsp_enabled": "1"})
+            _LOGGER.info(
+                "Enabled iDFace RTSP via API (rtsp_enabled=1). "
+                "Reboot the device to apply streaming changes."
+            )
+            self._onvif_config["rtsp_enabled"] = "1"
+        except ControlIDApiError:
+            _LOGGER.warning(
+                "Failed to enable iDFace RTSP via API. "
+                "Enable it in device GUI/Web: onvif.rtsp_enabled=1",
+                exc_info=True,
+            )
 
     @property
     def monitor_configured(self) -> bool:
@@ -235,10 +256,10 @@ class ControlIDDataUpdateCoordinator(DataUpdateCoordinator[ControlIDData]):
         self.async_set_updated_data(self.data)
 
         # Some firmware/builds don't send access_photo reliably. In that case,
-        # fetch the user's stored photo after an access-granted event.
+        # fetch the user's stored photo after access events with a valid user_id.
         event_id = self._to_int(log_entry.get("event"))
         user_id = self._to_int(log_entry.get("user_id"))
-        if event_id == EVENT_ACCESS_GRANTED and user_id > 0:
+        if user_id > 0 and (event_id in ACCESS_EVENTS_RELEVANT or event_id == 0):
             self.hass.async_create_task(self._async_refresh_user_photo(user_id))
 
     def handle_access_photo(self, photo_b64: str, user_id: int) -> None:
