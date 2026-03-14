@@ -63,7 +63,10 @@ class ControlIDDoorView(HomeAssistantView):
         door_id = door.get("id")
         is_open = door.get("open")
         if door_id is not None and is_open is not None:
-            self._coordinator.handle_door_event(int(door_id), bool(is_open))
+            try:
+                self._coordinator.handle_door_event(int(door_id), bool(is_open))
+            except (TypeError, ValueError):
+                _LOGGER.debug("Invalid /door payload: %s", data)
 
         return web.Response(status=200)
 
@@ -95,7 +98,10 @@ class ControlIDSecBoxView(HomeAssistantView):
         secbox_id = secbox.get("id")
         is_open = secbox.get("open")
         if secbox_id is not None and is_open is not None:
-            self._coordinator.handle_door_event(int(secbox_id), bool(is_open))
+            try:
+                self._coordinator.handle_door_event(int(secbox_id), bool(is_open))
+            except (TypeError, ValueError):
+                _LOGGER.debug("Invalid /secbox payload: %s", data)
 
         return web.Response(status=200)
 
@@ -154,7 +160,11 @@ class ControlIDAccessPhotoView(HomeAssistantView):
             return web.Response(status=400)
 
         photo_b64 = data.get("access_photo")
-        user_id = int(data.get("user_id", 0))
+        raw_user_id = data.get("user_id", 0)
+        try:
+            user_id = int(raw_user_id)
+        except (TypeError, ValueError):
+            user_id = 0
         if photo_b64:
             _LOGGER.debug(
                 "Monitor access_photo: user_id=%s, photo_len=%s",

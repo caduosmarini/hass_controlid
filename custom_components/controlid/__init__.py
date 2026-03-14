@@ -8,7 +8,15 @@ from urllib.parse import urlparse
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_HA_URL, DOMAIN, PLATFORMS
+from .const import (
+    CONF_DOOR_ID,
+    CONF_HA_URL,
+    CONF_SCAN_INTERVAL,
+    DEFAULT_DOOR_ID,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    PLATFORMS,
+)
 from .coordinator import ControlIDDataUpdateCoordinator
 from .webhook import async_register_views, get_monitor_path
 
@@ -23,6 +31,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ControlIDConfigEntry) ->
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     ha_url: str = entry.data.get(CONF_HA_URL, "") or entry.options.get(CONF_HA_URL, "")
     if ha_url:
@@ -43,6 +52,24 @@ async def async_unload_entry(hass: HomeAssistant, entry: ControlIDConfigEntry) -
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate old entries to newer schema versions."""
+    if entry.version < 2:
+        data = dict(entry.data)
+        if CONF_DOOR_ID not in data:
+            data[CONF_DOOR_ID] = DEFAULT_DOOR_ID
+        if CONF_SCAN_INTERVAL not in data:
+            data[CONF_SCAN_INTERVAL] = DEFAULT_SCAN_INTERVAL
+        hass.config_entries.async_update_entry(entry, data=data, version=2)
+        _LOGGER.info("Migrated Control iD entry %s to version 2", entry.entry_id)
+    return True
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload config entry after options are updated."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
 async def _configure_and_verify_monitor(
     coordinator: ControlIDDataUpdateCoordinator,
     ha_url: str,
@@ -52,7 +79,12 @@ async def _configure_and_verify_monitor(
     try:
         parsed = urlparse(ha_url)
         hostname = parsed.hostname or ha_url
-        port = str(parsed.port or 8123)
+        if parsed.port:
+            port = str(parsed.port)
+        elif parsed.scheme == "https":
+            port = "443"
+        else:
+            port = "8123"
         path = get_monitor_path(entry_id)
 
         _LOGGER.info(

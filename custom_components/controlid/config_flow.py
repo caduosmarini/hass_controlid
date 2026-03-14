@@ -135,33 +135,29 @@ class ControlIDOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
+        current_door_id = self.config_entry.options.get(
+            CONF_DOOR_ID,
+            self.config_entry.data.get(CONF_DOOR_ID, DEFAULT_DOOR_ID),
+        )
+        current_scan_interval = self.config_entry.options.get(
+            CONF_SCAN_INTERVAL,
+            self.config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+        )
+        current_ha_url = self.config_entry.options.get(
+            CONF_HA_URL,
+            self.config_entry.data.get(CONF_HA_URL, ""),
+        )
+
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
-                        CONF_DOOR_ID,
-                        default=self.config_entry.options.get(
-                            CONF_DOOR_ID,
-                            self.config_entry.data[CONF_DOOR_ID],
-                        ),
-                    ): int,
+                    vol.Required(CONF_DOOR_ID, default=current_door_id): int,
                     vol.Optional(
                         CONF_SCAN_INTERVAL,
-                        default=self.config_entry.options.get(
-                            CONF_SCAN_INTERVAL,
-                            self.config_entry.data.get(
-                                CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
-                            ),
-                        ),
+                        default=current_scan_interval,
                     ): vol.All(int, vol.Range(min=1, max=300)),
-                    vol.Optional(
-                        CONF_HA_URL,
-                        default=self.config_entry.options.get(
-                            CONF_HA_URL,
-                            self.config_entry.data.get(CONF_HA_URL, ""),
-                        ),
-                    ): str,
+                    vol.Optional(CONF_HA_URL, default=current_ha_url): str,
                 }
             ),
         )

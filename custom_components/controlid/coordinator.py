@@ -25,6 +25,7 @@ from .const import (
     CONF_SCAN_INTERVAL,
     CONF_USERNAME,
     DEFAULT_SCAN_INTERVAL,
+    DEFAULT_DOOR_ID,
     DOMAIN,
 )
 
@@ -53,6 +54,9 @@ class ControlIDDataUpdateCoordinator(DataUpdateCoordinator[ControlIDData]):
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         self.config_entry = config_entry
+        door_id = config_entry.options.get(
+            CONF_DOOR_ID, config_entry.data.get(CONF_DOOR_ID, DEFAULT_DOOR_ID)
+        )
         session = aiohttp_client.async_get_clientsession(hass, verify_ssl=False)
         self.api = ControlIDApiClient(
             session=session,
@@ -60,7 +64,7 @@ class ControlIDDataUpdateCoordinator(DataUpdateCoordinator[ControlIDData]):
             port=config_entry.data[CONF_PORT],
             login=config_entry.data[CONF_USERNAME],
             password=config_entry.data[CONF_PASSWORD],
-            door_id=config_entry.data[CONF_DOOR_ID],
+            door_id=door_id,
         )
         self._users_cache: dict[int, str] = {}
         self._last_photo: bytes | None = None
@@ -70,8 +74,9 @@ class ControlIDDataUpdateCoordinator(DataUpdateCoordinator[ControlIDData]):
         self._last_alive: datetime | None = None
         self._monitor_reconfigure_pending = False
 
-        scan_interval = config_entry.data.get(
-            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+        scan_interval = config_entry.options.get(
+            CONF_SCAN_INTERVAL,
+            config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
         )
         super().__init__(
             hass,
@@ -94,7 +99,12 @@ class ControlIDDataUpdateCoordinator(DataUpdateCoordinator[ControlIDData]):
         from .webhook import get_monitor_path
         parsed = urlparse(ha_url)
         hostname = parsed.hostname or ha_url
-        port = str(parsed.port or 8123)
+        if parsed.port:
+            port = str(parsed.port)
+        elif parsed.scheme == "https":
+            port = "443"
+        else:
+            port = "8123"
         path = get_monitor_path(self.config_entry.entry_id)
         return hostname, port, path
 
