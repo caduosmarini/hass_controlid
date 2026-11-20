@@ -29,8 +29,27 @@
           "door_id": "ID da porta",
           "scan_interval": "Intervalo de polling (segundos)",
           "ha_url": "URL do Home Assistant (para monitor em tempo real)",
-          "rtsp_url": "Template da URL RTSP (opcional)"
+          "rtsp_url": "Template da URL RTSP (opcional)",
+          "onvif_motion": "Ativar alarme de movimento ONVIF",
+          "onvif_port": "Porta ONVIF",
+          "onvif_username": "Usuário ONVIF",
+          "onvif_password": "Senha ONVIF"
+        },
+        "data_description": {
+          "onvif_motion": "Usa o alarme de movimento do próprio leitor. O ONVIF precisa estar habilitado no leitor.",
+          "onvif_password": "Deixe em branco para manter a senha salva para o mesmo usuário."
         }
+      }
+    },
+    "error": {
+      "onvif_username_required": "Informe o usuário ONVIF para ativar o alarme de movimento.",
+      "onvif_password_required": "Informe a senha ONVIF."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "motion": {
+        "name": "Movimento"
       }
     }
   }

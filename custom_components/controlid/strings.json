@@ -29,8 +29,27 @@
           "door_id": "Door ID",
           "scan_interval": "Polling interval (seconds)",
           "ha_url": "Home Assistant URL (for real-time monitor)",
-          "rtsp_url": "RTSP URL template (optional)"
+          "rtsp_url": "RTSP URL template (optional)",
+          "onvif_motion": "Enable ONVIF motion alarm",
+          "onvif_port": "ONVIF port",
+          "onvif_username": "ONVIF username",
+          "onvif_password": "ONVIF password"
+        },
+        "data_description": {
+          "onvif_motion": "Use the reader's own motion alarm. ONVIF must be enabled on the reader.",
+          "onvif_password": "Leave blank to keep the saved password for the same username."
         }
+      }
+    },
+    "error": {
+      "onvif_username_required": "Enter the ONVIF username to enable motion detection.",
+      "onvif_password_required": "Enter the ONVIF password."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "motion": {
+        "name": "Motion"
       }
     }
   }

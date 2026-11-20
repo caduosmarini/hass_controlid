@@ -11,6 +11,11 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import callback
 from homeassistant.helpers import aiohttp_client
+from homeassistant.helpers.selector import (
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
 
 from .api import ControlIDApiClient, ControlIDApiError, ControlIDAuthError
 from .const import (
@@ -18,11 +23,16 @@ from .const import (
     CONF_HA_URL,
     CONF_HOST,
     CONF_NAME,
+    CONF_ONVIF_MOTION,
+    CONF_ONVIF_PASSWORD,
+    CONF_ONVIF_PORT,
+    CONF_ONVIF_USERNAME,
     CONF_PORT,
     CONF_RTSP_URL,
     CONF_SCAN_INTERVAL,
     DEFAULT_DOOR_ID,
     DEFAULT_NAME,
+    DEFAULT_ONVIF_PORT,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
@@ -133,25 +143,37 @@ class ControlIDOptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
+        options = self._config_entry.options
+        errors: dict[str, str] = {}
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            values = dict(user_input)
+            username = values.pop(CONF_ONVIF_USERNAME, "").strip()
+            password = values.pop(CONF_ONVIF_PASSWORD, "")
+            if not password and username == options.get(CONF_ONVIF_USERNAME):
+                password = options.get(CONF_ONVIF_PASSWORD, "")
+            if values.get(CONF_ONVIF_MOTION):
+                if not username:
+                    errors[CONF_ONVIF_USERNAME] = "onvif_username_required"
+                if not password:
+                    errors[CONF_ONVIF_PASSWORD] = "onvif_password_required"
+            if not errors:
+                if username:
+                    values[CONF_ONVIF_USERNAME] = username
+                if username and password:
+                    values[CONF_ONVIF_PASSWORD] = password
+                return self.async_create_entry(title="", data=values)
 
-        current_door_id = self._config_entry.options.get(
+        defaults = {**self._config_entry.data, **options, **(user_input or {})}
+        current_door_id = defaults.get(
             CONF_DOOR_ID,
-            self._config_entry.data.get(CONF_DOOR_ID, DEFAULT_DOOR_ID),
+            DEFAULT_DOOR_ID,
         )
-        current_scan_interval = self._config_entry.options.get(
+        current_scan_interval = defaults.get(
             CONF_SCAN_INTERVAL,
-            self._config_entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+            DEFAULT_SCAN_INTERVAL,
         )
-        current_ha_url = self._config_entry.options.get(
-            CONF_HA_URL,
-            self._config_entry.data.get(CONF_HA_URL, ""),
-        )
-        current_rtsp_url = self._config_entry.options.get(
-            CONF_RTSP_URL,
-            self._config_entry.data.get(CONF_RTSP_URL, ""),
-        )
+        current_ha_url = defaults.get(CONF_HA_URL, "")
+        current_rtsp_url = defaults.get(CONF_RTSP_URL, "")
 
         return self.async_show_form(
             step_id="init",
@@ -164,6 +186,20 @@ class ControlIDOptionsFlowHandler(config_entries.OptionsFlow):
                     ): vol.All(int, vol.Range(min=1, max=300)),
                     vol.Optional(CONF_HA_URL, default=current_ha_url): str,
                     vol.Optional(CONF_RTSP_URL, default=current_rtsp_url): str,
+                    vol.Optional(
+                        CONF_ONVIF_MOTION, default=defaults.get(CONF_ONVIF_MOTION, False)
+                    ): bool,
+                    vol.Optional(
+                        CONF_ONVIF_PORT,
+                        default=defaults.get(CONF_ONVIF_PORT, DEFAULT_ONVIF_PORT),
+                    ): vol.All(int, vol.Range(min=1, max=65535)),
+                    vol.Optional(
+                        CONF_ONVIF_USERNAME, default=defaults.get(CONF_ONVIF_USERNAME, "")
+                    ): str,
+                    vol.Optional(CONF_ONVIF_PASSWORD): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                    ),
                 }
             ),
+            errors=errors,
         )

@@ -8,6 +8,7 @@ Integração customizada para equipamentos de acesso Control iD (iDAccess, iDFac
 - **Sensor de porta** (`binary_sensor`): Mostra se a porta está aberta ou fechada em tempo real.
 - **Último acesso** (`sensor`): Exibe o último evento de acesso (nome do usuário, tipo de evento) e os últimos 10 acessos nos atributos.
 - **Câmera RTSP** (`camera`, iDFace): Exibe stream em tempo real via RTSP (somente quando o dispositivo suporta módulo `onvif`).
+- **Movimento ONVIF** (`binary_sensor`, opcional): Recebe o alarme de movimento nativo de leitores iDFace compatíveis sem abrir o vídeo.
 - **Monitor em tempo real** (opcional): Recebe notificações push do dispositivo via HTTP (abertura/fechamento de porta e novos acessos).
 - Config Flow (UI) para cadastro do equipamento.
 - Traduções `pt-BR` e `en`.
@@ -53,6 +54,13 @@ Campos solicitados:
 | ID da porta | Número da porta/relé (padrão: 1) |
 | URL do HA | Opcional. Ex: `http://192.168.1.100:8123`. Se preenchido, configura o Monitor do dispositivo para enviar notificações em tempo real ao HA. |
 | Template da URL RTSP | Opcional. Ex: `rtsp://{username}:{password}@{host}:554/main_stream` |
+
+### Alarme de movimento ONVIF
+
+Nas opções da integração, marque **Ativar alarme de movimento ONVIF** e informe
+a porta (padrão `8000`) e as credenciais ONVIF do leitor. O ONVIF precisa estar
+habilitado no equipamento. O sensor **Movimento** aparece no mesmo dispositivo
+do Control iD e muda de estado conforme o leitor envia eventos `MotionAlarm`.
 
 ## API utilizada
 

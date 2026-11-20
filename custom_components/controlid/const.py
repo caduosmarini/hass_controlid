@@ -11,11 +11,16 @@ CONF_NAME = "name"
 CONF_HA_URL = "ha_url"
 CONF_SCAN_INTERVAL = "scan_interval"
 CONF_RTSP_URL = "rtsp_url"
+CONF_ONVIF_MOTION = "onvif_motion"
+CONF_ONVIF_PORT = "onvif_port"
+CONF_ONVIF_USERNAME = "onvif_username"
+CONF_ONVIF_PASSWORD = "onvif_password"
 
 DEFAULT_NAME = "Control iD"
 DEFAULT_PORT = 80
 DEFAULT_DOOR_ID = 1
 DEFAULT_SCAN_INTERVAL = 5
+DEFAULT_ONVIF_PORT = 8000
 DEFAULT_RTSP_URL_TEMPLATE = (
     "rtsp://{username}:{password}@{host}:554/main_stream"
 )
